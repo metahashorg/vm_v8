@@ -40,7 +40,8 @@ enum Mode
     INS_COUNT,
     MEMORY_USAGE,
     INIT_CONTRACT,
-    DUMP_CONTRACT
+    DUMP_CONTRACT,
+    EXTERNAL_TEST
 };
 
 struct CmdLine
@@ -71,6 +72,12 @@ bool ParseCmdLine(int argc, char** argv, CmdLine& cmdline)
             cmdline.code.clear();
             result = true;
         }
+        if (mode == EXTERNAL_TEST && argc == 3)
+        {
+            cmdline.mode = mode;
+            cmdline.code.clear();
+            result = true;
+        }
     }
     return result;
 }
@@ -84,6 +91,7 @@ void Usage(const char* progname)
             "2 - show memory usage\n"
             "3 - initialization of the contract status in the stack\n"
             "4 - read the status of a contract from the stack\n"
+            "5 - external variable and function test\n"
             ,
             progname
         );
@@ -324,6 +332,39 @@ void ShowMemoryUsage(const std::string& code)
     DumpCounters(isolate);
 }
 
+//Тест внешней функции и переменной
+#include "external/externalfunc.hpp"
+
+void ExternalTest()
+{
+    std::string jscode = "print(10);";
+    v8::Isolate::CreateParams create_params;
+    create_params.array_buffer_allocator = v8::ArrayBuffer::Allocator::NewDefaultAllocator();
+    v8::Isolate* isolate = v8::Isolate::New(create_params);
+    {
+        v8::Isolate::Scope isolate_scope(isolate);
+        v8::HandleScope handle_scope(isolate);
+        v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
+        //Регистрируем функцию печати
+        AddPrint(&global, isolate);
+        v8::Local<v8::Context> context = v8::Context::New(isolate, NULL, global);
+        v8::Context::Scope context_scope(context);
+        v8::Local<v8::String> source =
+        v8::String::NewFromUtf8(isolate,
+                                jscode.c_str(),
+                                v8::NewStringType::kNormal).ToLocalChecked();
+
+        v8::Local<v8::Script> script =
+        v8::Script::Compile(context, source).ToLocalChecked();
+        script->Run(context).ToLocalChecked();
+    }
+
+    isolate->Dispose();
+    v8::V8::Dispose();
+    v8::V8::ShutdownPlatform();
+    delete create_params.array_buffer_allocator;
+}
+
 int main(int argc, char* argv[])
 {
     v8::V8::InitializeICUDefaultLocation(argv[0]);
@@ -356,6 +397,10 @@ int main(int argc, char* argv[])
         if (cmdline.mode == INIT_CONTRACT)
         {
             //InitContractState();
+        }
+        if (cmdline.mode == EXTERNAL_TEST)
+        {
+            ExternalTest();
         }
     }
     else

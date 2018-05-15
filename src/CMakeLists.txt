@@ -8,6 +8,7 @@ add_definitions(-DSNIPER_LOG_TRACE -DSNIPER_LOG_DEBUG)
 
 set(PROJECT_HEADERS
 	jscode.h
+	external/externalfunc.hpp
     )
 
 
