@@ -45,7 +45,8 @@ enum Mode
     DUMP_CONTRACT,
     EXTERNAL_TEST,
     SHA256_TEST,
-    SIGNATURE_TEST
+    SIGNATURE_TEST,
+    ADDRESS_TEST
 };
 
 struct CmdLine
@@ -76,13 +77,9 @@ bool ParseCmdLine(int argc, char** argv, CmdLine& cmdline)
             cmdline.code.clear();
             result = true;
         }
-        if (mode == EXTERNAL_TEST && argc == 4)
-        {
-            cmdline.mode = mode;
-            cmdline.code = argv[3];
-            result = true;
-        }
-        if (mode == SHA256_TEST && argc == 4)
+        if ( (mode == EXTERNAL_TEST && argc == 4) ||
+            (mode == SHA256_TEST && argc == 4) ||
+            (mode == ADDRESS_TEST && argc == 4) )
         {
             cmdline.mode = mode;
             cmdline.code = argv[3];
@@ -372,12 +369,14 @@ void SignatureCheckTest()
     std::string jscode = "";
     //Собираем код
     std::string hex_pubkey = "3059301306072a8648ce3d020106082a8648ce3d0301070342000439bb171cffe714dcea16ca9c7d76dc6d305a1bcdb1fb062c2b95101d03da91bec12bc320e2f137df309f7f4e89c4336a575178b13b70da906cb2d38aa01c6d7c";
-    std::string hex_sign = "43b950939ad9863790df0aa34806eefce5a95a49c59f5680221a3243e2f4e5f013e9d595ee4d5b80dc6e75171cf256441a1429cf9a86f9692f0bfc5e8e328368";
+    std::string hex_sign = "1059e0e4e99fc4b974455f75b95abd2eb82c03a4720de2d8dcdc3e09159803c2f81665fc45f6359e5b3d5737b76c22fb83bb2c3cdb74330d6ce3ac8418911369";
     std::string data = "data for test";
     jscode = "var pubkey = \"" + hex_pubkey + "\";\n";
     jscode += "var sign = \"" + hex_sign + "\";\n";
     jscode += "var data = \"" + data + "\";\n";
-    jscode += "meta_MHC_check_sign(pubkey, sign, data);";
+    jscode += "if (meta_MHC_check_sign(pubkey, sign, data))\n";
+    jscode += "print(\"Verified OK.\");\nelse\n";
+    jscode += "print(\"Signature virification error.\");";
 
     v8::Isolate::CreateParams create_params;
     create_params.array_buffer_allocator = v8::ArrayBuffer::Allocator::NewDefaultAllocator();
@@ -405,6 +404,38 @@ void SignatureCheckTest()
     delete create_params.array_buffer_allocator;
 }
 
+//Тест функции генерации адреса
+#include "external/functions/address_from_pubkey.hpp"
+
+void CreateAddressTest(const std::string& hex_pubkey)
+{
+    std::string jscode = "print(meta_MHC_addr_from_pub_key(\"" + hex_pubkey + "\"))";
+
+    v8::Isolate::CreateParams create_params;
+    create_params.array_buffer_allocator = v8::ArrayBuffer::Allocator::NewDefaultAllocator();
+    v8::Isolate* isolate = v8::Isolate::New(create_params);
+    {
+        v8::Isolate::Scope isolate_scope(isolate);
+        v8::HandleScope handle_scope(isolate);
+        v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
+        AddAddressFromPubkey(&global, isolate);
+        AddPrint(&global, isolate);
+        v8::Local<v8::Context> context = v8::Context::New(isolate, NULL, global);
+        v8::Context::Scope context_scope(context);
+        v8::Local<v8::String> source =
+        v8::String::NewFromUtf8(isolate,
+                                jscode.c_str(),
+                                v8::NewStringType::kNormal).ToLocalChecked();
+
+        v8::Local<v8::Script> script =
+        v8::Script::Compile(context, source).ToLocalChecked();
+        script->Run(context).ToLocalChecked();
+    }
+    isolate->Dispose();
+    v8::V8::Dispose();
+    v8::V8::ShutdownPlatform();
+    delete create_params.array_buffer_allocator;
+}
 
 int main(int argc, char* argv[])
 {
@@ -413,6 +444,10 @@ int main(int argc, char* argv[])
     std::unique_ptr<v8::Platform> platform =  std::unique_ptr<v8::Platform>(v8::platform::CreateDefaultPlatform());
     v8::V8::InitializePlatform(platform.get());
     v8::V8::Initialize();
+
+    SSL_load_error_strings();
+    SSL_library_init();
+    OpenSSL_add_all_algorithms();
 
     CmdLine cmdline;
     std::string bytecode;
@@ -432,25 +467,15 @@ int main(int argc, char* argv[])
                 printf("%s = %ld\n", it->first.c_str(),  it->second);
         }
         if (cmdline.mode == MEMORY_USAGE)
-        {
             ShowMemoryUsage(cmdline.code);
-        }
-        if (cmdline.mode == INIT_CONTRACT)
-        {
-            //InitContractState();
-        }
         if (cmdline.mode == EXTERNAL_TEST)
-        {
             ExternalTest(cmdline.code);
-        }
         if (cmdline.mode == SHA256_TEST)
-        {
             SHA256Test(cmdline.code);
-        }
         if (cmdline.mode == SIGNATURE_TEST)
-        {
             SignatureCheckTest();
-        }
+        if (cmdline.mode == ADDRESS_TEST)
+            CreateAddressTest(cmdline.code);
     }
     else
     {
