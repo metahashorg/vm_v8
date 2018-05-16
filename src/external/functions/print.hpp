@@ -1,6 +1,9 @@
 #include <include/libplatform/libplatform.h>
 #include <include/v8.h>
 
+#ifndef PRINT_FUNCTION
+#define PRINT_FUNCTION
+
 void print(const v8::FunctionCallbackInfo<v8::Value>& args)
 {
     if (args.Length() < 1)
@@ -27,3 +30,5 @@ void AddPrint(v8::Local<v8::ObjectTemplate>* global, v8::Isolate* isolate)
     v8::Local<v8::FunctionTemplate> printfunc = v8::FunctionTemplate::New(isolate, print);
     (*global)->Set(v8::String::NewFromUtf8(isolate, "print"), printfunc);
 }
+
+#endif

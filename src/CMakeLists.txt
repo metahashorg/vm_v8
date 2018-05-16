@@ -8,7 +8,11 @@ add_definitions(-DSNIPER_LOG_TRACE -DSNIPER_LOG_DEBUG)
 
 set(PROJECT_HEADERS
 	jscode.h
-	external/externalfunc.hpp
+	external/functions/print.hpp
+        external/functions/sha256.hpp
+        external/functions/check_sign.hpp
+	external/variables/test.hpp
+	utils.h
     )
 
 
@@ -17,6 +21,8 @@ set(PROJECT_SOURCES
 
 
 set(PROJECT_MAIN
+    utils.cpp
+    stdcapture.hpp
     main.cpp
     )
 
@@ -25,9 +31,13 @@ find_package(Threads)
 find_package(fmt REQUIRED)
 #Sniper
 find_package(Sniper REQUIRED)
+#OpenSSL
+find_package(OpenSSL REQUIRED)
+include_directories(${OPENSSL_INCLUDE_DIR})
 
 set(PROJECT_LIBS 
     ${CMAKE_THREAD_LIBS_INIT}
+    ${OPENSSL_LIBRARIES}
     rt.a
     m.a
     z.a

@@ -16,6 +16,8 @@
 #include <stdio.h>
 #include <string>
 
+#include "stdcapture.hpp"
+
 std::string ReadFile(const std::string& path)
 {
     std::ifstream input(path, std::ifstream::binary);
@@ -41,7 +43,9 @@ enum Mode
     MEMORY_USAGE,
     INIT_CONTRACT,
     DUMP_CONTRACT,
-    EXTERNAL_TEST
+    EXTERNAL_TEST,
+    SHA256_TEST,
+    SIGNATURE_TEST
 };
 
 struct CmdLine
@@ -72,10 +76,21 @@ bool ParseCmdLine(int argc, char** argv, CmdLine& cmdline)
             cmdline.code.clear();
             result = true;
         }
-        if (mode == EXTERNAL_TEST && argc == 3)
+        if (mode == EXTERNAL_TEST && argc == 4)
         {
             cmdline.mode = mode;
-            cmdline.code.clear();
+            cmdline.code = argv[3];
+            result = true;
+        }
+        if (mode == SHA256_TEST && argc == 4)
+        {
+            cmdline.mode = mode;
+            cmdline.code = argv[3];
+            result = true;
+        }
+        if (mode == SIGNATURE_TEST && argc == 3)
+        {
+            cmdline.mode = mode;
             result = true;
         }
     }
@@ -96,99 +111,6 @@ void Usage(const char* progname)
             progname
         );
 }
-
-//Вспомогательный класс
-class StdCapture
-{
-public:
-    StdCapture(): m_oldStdOut(0), m_oldStdErr(0), m_capturing(false), m_init(false)
-    {
-        m_pipe[READ] = 0;
-        m_pipe[WRITE] = 0;
-        if (pipe(m_pipe) == -1)
-            return;
-        m_oldStdOut = dup(fileno(stdout));
-        m_oldStdErr = dup(fileno(stderr));
-        if (m_oldStdOut == -1 || m_oldStdErr == -1)
-            return;
-
-        m_init = true;
-    }
-
-    ~StdCapture()
-    {
-        if (m_oldStdOut > 0)
-            close(m_oldStdOut);
-        if (m_oldStdErr > 0)
-            close(m_oldStdErr);
-        if (m_pipe[READ] > 0)
-            close(m_pipe[READ]);
-        if (m_pipe[WRITE] > 0)
-            close(m_pipe[WRITE]);
-    }
-
-    void BeginCapture()
-    {
-        if (!m_init)
-            return;
-        if (m_capturing)
-            EndCapture();
-        fflush(stdout);
-        fflush(stderr);
-        dup2(m_pipe[WRITE], fileno(stdout));
-        dup2(m_pipe[WRITE], fileno(stderr));
-        m_capturing = true;
-    }
-
-    bool EndCapture()
-    {
-        if (!m_init)
-            return false;
-        if (!m_capturing)
-            return false;
-        fflush(stdout);
-        fflush(stderr);
-        dup2(m_oldStdOut, fileno(stdout));
-        dup2(m_oldStdErr, fileno(stderr));
-        m_captured.clear();
-
-        std::string buf;
-        const int bufSize = 1024;
-        buf.resize(bufSize);
-        int bytesRead = 0;
-        bytesRead = read(m_pipe[READ], &(*buf.begin()), bufSize);
-
-        while(bytesRead == bufSize)
-        {
-            m_captured += buf;
-            bytesRead = read(m_pipe[READ], &(*buf.begin()), bufSize);
-        }
-        if (bytesRead > 0)
-        {
-            buf.resize(bytesRead);
-            m_captured += buf;
-        }
-        return true;
-    }
-
-    std::string GetCapture() const
-    {
-        std::string::size_type idx = m_captured.find_last_not_of("\r\n");
-        if (idx == std::string::npos)
-            return m_captured;
-        else
-            return m_captured.substr(0, idx+1);
-    }
-
-private:
-    enum PIPES { READ, WRITE };
-    int m_pipe[2];
-    int m_oldStdOut;
-    int m_oldStdErr;
-    bool m_capturing;
-    bool m_init;
-    std::string m_captured;
-};
 
 std::string GetBytecode(const char* jscode)
 {
@@ -333,11 +255,54 @@ void ShowMemoryUsage(const std::string& code)
 }
 
 //Тест внешней функции и переменной
-#include "external/externalfunc.hpp"
+#include "external/functions/print.hpp"
+#include "external/variables/test.hpp"
 
-void ExternalTest()
+v8::Global<v8::Context> context_;
+v8::Global<v8::ObjectTemplate> global_template_;
+
+v8::Local<v8::ObjectTemplate> MakeObjectTemplate(v8::Isolate* isolate)
 {
-    std::string jscode = "print(10);";
+    v8::EscapableHandleScope handle_scope(isolate);
+    v8::Local<v8::ObjectTemplate> result = v8::ObjectTemplate::New(isolate);
+    result->SetInternalFieldCount(1);
+    //Создаем переменную value
+    AddDataValue(&result, isolate);
+    return handle_scope.Escape(result);
+}
+
+v8::Local<v8::Object> WrapObject(v8::Isolate* isolate_, Data* obj)
+{
+    v8::EscapableHandleScope handle_scope(isolate_);
+    v8::TryCatch try_catch(isolate_);
+    if (global_template_.IsEmpty())
+    {
+        v8::Local<v8::ObjectTemplate> raw_template = MakeObjectTemplate(isolate_);
+        global_template_.Reset(isolate_, raw_template);
+    }
+    v8::Local<v8::ObjectTemplate> templ = v8::Local<v8::ObjectTemplate>::New(isolate_, global_template_);
+    v8::Local<v8::Object> result = templ->NewInstance(isolate_->GetCurrentContext()).ToLocalChecked();
+    v8::Local<v8::External> obj_ptr = v8::External::New(isolate_, obj);
+    result->SetInternalField(0, obj_ptr);
+    return handle_scope.Escape(result);
+}
+
+void InstallObjects(v8::Isolate* isolate_, Data* data)
+{
+    v8::HandleScope handle_scope(isolate_);
+    v8::TryCatch try_catch(isolate_);
+    v8::Local<v8::Object> opts_obj = WrapObject(isolate_, data);
+    v8::Local<v8::Context> context =
+    v8::Local<v8::Context>::New(isolate_, context_);
+    context->Global()->Set(context,
+                            v8::String::NewFromUtf8(isolate_, "Data", v8::NewStringType::kNormal).ToLocalChecked(), opts_obj).FromJust();
+}
+
+void ExternalTest(const std::string& code)
+{
+    Data data;
+    data.value = std::stoi(code);
+    std::string jscode = "print(Data.value)";
     v8::Isolate::CreateParams create_params;
     create_params.array_buffer_allocator = v8::ArrayBuffer::Allocator::NewDefaultAllocator();
     v8::Isolate* isolate = v8::Isolate::New(create_params);
@@ -346,6 +311,41 @@ void ExternalTest()
         v8::HandleScope handle_scope(isolate);
         v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
         //Регистрируем функцию печати
+        AddPrint(&global, isolate);
+        v8::Local<v8::Context> context = v8::Context::New(isolate, NULL, global);
+        v8::Context::Scope context_scope(context);
+        context_.Reset(isolate, context);
+        //Устанавливаем объект типа Data кака переменную
+        InstallObjects(isolate, &data);
+        v8::Local<v8::String> source =
+        v8::String::NewFromUtf8(isolate,
+                                jscode.c_str(),
+                                v8::NewStringType::kNormal).ToLocalChecked();
+
+        v8::Local<v8::Script> script =
+        v8::Script::Compile(context, source).ToLocalChecked();
+        script->Run(context).ToLocalChecked();
+    }
+    //isolate->Dispose();
+    v8::V8::Dispose();
+    v8::V8::ShutdownPlatform();
+    delete create_params.array_buffer_allocator;
+}
+
+//Тест sha256
+#include "external/functions/sha256.hpp"
+
+void SHA256Test(const std::string& data)
+{
+    std::string jscode = "print(meta_sha256(\"" + data + "\"));";
+    v8::Isolate::CreateParams create_params;
+    create_params.array_buffer_allocator = v8::ArrayBuffer::Allocator::NewDefaultAllocator();
+    v8::Isolate* isolate = v8::Isolate::New(create_params);
+    {
+        v8::Isolate::Scope isolate_scope(isolate);
+        v8::HandleScope handle_scope(isolate);
+        v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
+        AddSHA256(&global, isolate);
         AddPrint(&global, isolate);
         v8::Local<v8::Context> context = v8::Context::New(isolate, NULL, global);
         v8::Context::Scope context_scope(context);
@@ -358,12 +358,53 @@ void ExternalTest()
         v8::Script::Compile(context, source).ToLocalChecked();
         script->Run(context).ToLocalChecked();
     }
-
     isolate->Dispose();
     v8::V8::Dispose();
     v8::V8::ShutdownPlatform();
     delete create_params.array_buffer_allocator;
 }
+
+//Тест функции проверки сигнатуры
+#include "external/functions/check_sign.hpp"
+
+void SignatureCheckTest()
+{
+    std::string jscode = "";
+    //Собираем код
+    std::string hex_pubkey = "3059301306072a8648ce3d020106082a8648ce3d0301070342000439bb171cffe714dcea16ca9c7d76dc6d305a1bcdb1fb062c2b95101d03da91bec12bc320e2f137df309f7f4e89c4336a575178b13b70da906cb2d38aa01c6d7c";
+    std::string hex_sign = "43b950939ad9863790df0aa34806eefce5a95a49c59f5680221a3243e2f4e5f013e9d595ee4d5b80dc6e75171cf256441a1429cf9a86f9692f0bfc5e8e328368";
+    std::string data = "data for test";
+    jscode = "var pubkey = \"" + hex_pubkey + "\";\n";
+    jscode += "var sign = \"" + hex_sign + "\";\n";
+    jscode += "var data = \"" + data + "\";\n";
+    jscode += "meta_MHC_check_sign(pubkey, sign, data);";
+
+    v8::Isolate::CreateParams create_params;
+    create_params.array_buffer_allocator = v8::ArrayBuffer::Allocator::NewDefaultAllocator();
+    v8::Isolate* isolate = v8::Isolate::New(create_params);
+    {
+        v8::Isolate::Scope isolate_scope(isolate);
+        v8::HandleScope handle_scope(isolate);
+        v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
+        AddCheckSign(&global, isolate);
+        AddPrint(&global, isolate);
+        v8::Local<v8::Context> context = v8::Context::New(isolate, NULL, global);
+        v8::Context::Scope context_scope(context);
+        v8::Local<v8::String> source =
+        v8::String::NewFromUtf8(isolate,
+                                jscode.c_str(),
+                                v8::NewStringType::kNormal).ToLocalChecked();
+
+        v8::Local<v8::Script> script =
+        v8::Script::Compile(context, source).ToLocalChecked();
+        script->Run(context).ToLocalChecked();
+    }
+    isolate->Dispose();
+    v8::V8::Dispose();
+    v8::V8::ShutdownPlatform();
+    delete create_params.array_buffer_allocator;
+}
+
 
 int main(int argc, char* argv[])
 {
@@ -400,7 +441,15 @@ int main(int argc, char* argv[])
         }
         if (cmdline.mode == EXTERNAL_TEST)
         {
-            ExternalTest();
+            ExternalTest(cmdline.code);
+        }
+        if (cmdline.mode == SHA256_TEST)
+        {
+            SHA256Test(cmdline.code);
+        }
+        if (cmdline.mode == SIGNATURE_TEST)
+        {
+            SignatureCheckTest();
         }
     }
     else
