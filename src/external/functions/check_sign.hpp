@@ -111,11 +111,10 @@ void check_sign(const v8::FunctionCallbackInfo<v8::Value>& args)
             ECDSA_SIG* signature = ECSignatureFromBuffer(sign.data(), sign.size(), pk);
             if (signature)
             {
-                if (CheckBufferSignature(pk, (const unsigned char*)data.data(), 13, signature))
+                if (CheckBufferSignature(pk, (const unsigned char*)data.data(), data.size(), signature))
                     printf("Verified OK.\n");
                 else
                     printf("Not valid.\n");
-
             }
         }
 
