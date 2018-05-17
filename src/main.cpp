@@ -46,13 +46,15 @@ enum Mode
     EXTERNAL_TEST,
     SHA256_TEST,
     SIGNATURE_TEST,
-    ADDRESS_TEST
+    ADDRESS_TEST,
+    COMPILE_TEST
 };
 
 struct CmdLine
 {
     Mode mode;
     std::string code;
+    std::string address;
 };
 
 bool ParseCmdLine(int argc, char** argv, CmdLine& cmdline)
@@ -90,6 +92,13 @@ bool ParseCmdLine(int argc, char** argv, CmdLine& cmdline)
             cmdline.mode = mode;
             result = true;
         }
+        if (mode == COMPILE_TEST && argc == 5)
+        {
+            cmdline.mode = mode;
+            cmdline.address = argv[3];
+            cmdline.code = ReadFile(argv[4]);
+            result = true;
+        }
     }
     return result;
 }
@@ -109,11 +118,13 @@ void Usage(const char* progname)
         );
 }
 
-std::string GetBytecode(const char* jscode)
+std::string GetBytecode(const char* jscode, std::string& err, std::string& cmpl)
 {
     StdCapture out;
     out.BeginCapture();
-    std::string bytecode;
+    std::string bytecode = "";
+    err.clear();
+    cmpl.clear();
     //Установка флага вывода байткода
     v8::V8::SetFlagsFromString("--trace-ignition", 16);
     v8::Isolate::CreateParams create_params;
@@ -122,17 +133,51 @@ std::string GetBytecode(const char* jscode)
     {
         v8::Isolate::Scope isolate_scope(isolate);
         v8::HandleScope handle_scope(isolate);
+        v8::TryCatch try_catch(isolate);
         v8::Local<v8::Context> context = v8::Context::New(isolate);
         v8::Context::Scope context_scope(context);
 
         v8::Local<v8::String> source =
         v8::String::NewFromUtf8(isolate,
-                        jscode,
-                        v8::NewStringType::kNormal).ToLocalChecked();
+                                jscode,
+                                v8::NewStringType::kNormal).ToLocalChecked();
 
-        v8::Local<v8::Script> script =
-        v8::Script::Compile(context, source).ToLocalChecked();
-        v8::Local<v8::Value> result = script->Run(context).ToLocalChecked();
+        v8::Local<v8::Script> script;
+        if (!v8::Script::Compile(context, source).ToLocal(&script))
+        {
+            v8::String::Utf8Value error(isolate, try_catch.Exception());
+            err = *error;
+            return "";
+        }
+
+        v8::Local<v8::Value> result;
+        if (!script->Run(context).ToLocal(&result))
+        {
+            v8::Local<v8::Value> val = try_catch.Exception();
+            if (!val->IsTrue())
+            {
+                v8::String::Utf8Value error(isolate, try_catch.Exception());
+                err = *error;
+                return "";
+            }
+        }
+
+
+        //Если выполнение удачно, то сохраняем копию компилированного кода
+        v8::Local<v8::Value> testresult;
+        v8::ScriptOrigin origin(v8::String::NewFromUtf8(isolate,
+                                "test",
+                                v8::NewStringType::kNormal).ToLocalChecked());
+        v8::ScriptCompiler::Source src(source, origin);
+        v8::Local<v8::UnboundScript> unboundscript = v8::ScriptCompiler::CompileUnboundScript(isolate, &src, v8::ScriptCompiler::kProduceFullCodeCache).ToLocalChecked();
+        v8::ScriptCompiler::CachedData* data = v8::ScriptCompiler::CreateCodeCache(unboundscript);
+        if (data && data->length)
+        {
+            cmpl.resize(data->length);
+            memcpy((void*)cmpl.data(), data->data, data->length);
+        }
+        else
+            err += "Can not create code cache\n";
 
         v8::String::Utf8Value utf8(isolate, result);
         out.EndCapture();
@@ -437,6 +482,50 @@ void CreateAddressTest(const std::string& hex_pubkey)
     delete create_params.array_buffer_allocator;
 }
 
+//Тест компиляции
+void CompileTest(const std::string& address, const std::string& code)
+{
+    std::string dbgfilepath = address + ".dbg";
+    std::string btfilepath = address + ".bt";
+    std::string cmplfilepath = address + ".cmpl";
+    std::ofstream dbgfile(dbgfilepath, std::ios::out | std::ios::app);
+    std::ofstream btfile(btfilepath, std::ios::out | std::ios::app);
+    std::ofstream cmplfile(cmplfilepath, std::ios::out | std::ios::app);
+    if (!dbgfile || !btfile || !cmplfile)
+    {
+        printf("Open output files error.\n");
+        return;
+    }
+    std::string debuglog = "";
+    std::string err = "";
+    std::string cmpl = "";
+    std::string bytecode = GetBytecode(code.c_str(), err, cmpl);
+    if (bytecode.empty())//Произошла ошибка выполнения
+    {
+        debuglog += err;
+        dbgfile << debuglog;
+    }
+    else
+    {
+        //Создаем файл с байткодом
+        btfile << bytecode;
+        btfile.close();
+        if (err.empty())//Ошибок при создании компилированного кода тоже не было
+        {
+            //Cохраняем компилированный скрипт в ADDR.cmpl
+            cmplfile << cmpl;
+        }
+        else
+        {
+            debuglog += err;
+            dbgfile << debuglog;
+        }
+    }
+    dbgfile.close();
+    btfile.close();
+    cmplfile.close();
+}
+
 int main(int argc, char* argv[])
 {
     v8::V8::InitializeICUDefaultLocation(argv[0]);
@@ -451,17 +540,19 @@ int main(int argc, char* argv[])
 
     CmdLine cmdline;
     std::string bytecode;
+    std::string err;
+    std::string cmpl;
     if (ParseCmdLine(argc, argv, cmdline))
     {
         if (cmdline.mode == SHOW_BYTECODE)
         {
-            bytecode = GetBytecode(cmdline.code.c_str());
+            bytecode = GetBytecode(cmdline.code.c_str(), err, cmpl);
             printf("%s\n", bytecode.c_str());
         }
         if (cmdline.mode == INS_COUNT)
         {
             std::unordered_map<std::string, size_t> instructions;
-            bytecode = GetBytecode(cmdline.code.c_str());
+            bytecode = GetBytecode(cmdline.code.c_str(), err, cmpl);
             ParseBytecode(bytecode, instructions);
             for (auto it = instructions.begin(); it != instructions.end(); ++it)
                 printf("%s = %ld\n", it->first.c_str(),  it->second);
@@ -476,6 +567,8 @@ int main(int argc, char* argv[])
             SignatureCheckTest();
         if (cmdline.mode == ADDRESS_TEST)
             CreateAddressTest(cmdline.code);
+        if (cmdline.mode == COMPILE_TEST)
+            CompileTest(cmdline.address, cmdline.code);
     }
     else
     {
