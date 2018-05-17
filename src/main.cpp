@@ -113,6 +113,10 @@ void Usage(const char* progname)
             "3 - initialization of the contract status in the stack\n"
             "4 - read the status of a contract from the stack\n"
             "5 - external variable and function test\n"
+            "6 - sha256 function test\n"
+            "7 - signature test\n"
+            "8 - address test\n"
+            "9 - compile test\n"
             ,
             progname
         );
@@ -161,7 +165,6 @@ std::string GetBytecode(const char* jscode, std::string& err, std::string& cmpl)
                 return "";
             }
         }
-
 
         //Если выполнение удачно, то сохраняем копию компилированного кода
         v8::Local<v8::Value> testresult;
