@@ -1,5 +1,5 @@
 # libv8js_example
-Repository provides examples of how to solve some tasks in C ++ using v8 library.
+Repository provides examples of how to solve some tasks in C++ using v8 library.
 
 ## Dependencies
 The following libraries are required to be installed:
@@ -20,7 +20,7 @@ cd build
 `/src` directory contains built vm_v8 utility.
 Before launching the utility, it is needed to run the following command:
 ```shell
-export LD_LIBRARY_PATH = $ LD_LIBRARY_PATH: src / v8 / lib
+export LD_LIBRARY_PATH = $ LD_LIBRARY_PATH: src/v8/lib
 ```
 
 ## Features
