@@ -1,5 +1,8 @@
 #include "utils.h"
 
+#include <fstream>
+#include <openssl/ripemd.h>
+
 std::string DumpToHexString(const uint8_t* dump, uint32_t dumpsize)
 {
     std::string res;
@@ -93,8 +96,6 @@ bool CheckBufferSignature(EVP_PKEY* publicKey, const unsigned char* buf, size_t 
         return false;
 }
 
-#include <openssl/ripemd.h>
-
 bool MhcPubkeyToAddress(uint8_t* in,
                         size_t insize,
                         uint8_t* out,
@@ -154,4 +155,21 @@ bool EVPKEYToAddress(EVP_PKEY* pubkey,
             delete[] data;
     }
     return result;
+}
+
+std::string ReadFile(const std::string& path)
+{
+    std::ifstream input(path, std::ifstream::binary);
+    std::string str = "";
+
+    if (input)
+    {
+        input.seekg(0, input.end);
+        size_t length = input.tellg();
+        input.seekg(0, input.beg);
+        str.resize(length, ' ');
+        input.read(&*str.begin(), length);
+        input.close();
+    }
+    return str;
 }

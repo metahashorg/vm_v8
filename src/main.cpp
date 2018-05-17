@@ -1,39 +1,27 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <string>
 #include <sstream>
 #include <iostream>
+#include <string>
 #include <unordered_map>
 #include <vector>
 #include <locale>
 
+#include <unistd.h>
+#include <fcntl.h>
+
 #include "include/libplatform/libplatform.h"
 #include "include/v8.h"
 
-#include <unistd.h>
-#include <fcntl.h>
-#include <stdio.h>
-#include <string>
-
+#include "utils.h"
 #include "stdcapture.hpp"
 
-std::string ReadFile(const std::string& path)
-{
-    std::ifstream input(path, std::ifstream::binary);
-    std::string str = "";
-
-    if (input)
-    {
-        input.seekg(0, input.end);
-        size_t length = input.tellg();
-        input.seekg(0, input.beg);
-        str.resize(length, ' ');
-        input.read(&*str.begin(), length);
-        input.close();
-    }
-    return str;
-}
+#include "external/functions/print.hpp"
+#include "external/variables/value.hpp"
+#include "external/functions/meta_sha256.hpp"
+#include "external/functions/meta_MHC_check_sign.hpp"
+#include "external/functions/meta_MHC_addr_from_pub_key.hpp"
 
 //командная строка
 enum Mode
@@ -110,7 +98,7 @@ void Usage(const char* progname)
             "0 - show bytecode\n"
             "1 - instructions count\n"
             "2 - show memory usage\n"
-            "3 - initialization of the contract status in the stack\n"
+            "3 - initialization of the contract status in the stack (Not ready yet)\n"
             "4 - read the status of a contract from the stack\n"
             "5 - external variable and function test\n"
             "6 - sha256 function test\n"
@@ -199,29 +187,21 @@ void ParseBytecode(const std::string& bytecode, std::unordered_map<std::string, 
     std::string ins = "";
     std::string remainder = "";
     std::string text = bytecode;
-    size_t i,j;
-
-    std::stringstream ss(text);
-    std::string item;
-    std::vector<std::string> lines;
-    while (std::getline(ss, item, (char)0x0A))
-        lines.push_back(item);
-
-    for (size_t k = 0; k < lines.size(); ++k)
+    size_t i = 0;
+    size_t j = 0;
+    i = text.find('@');
+    while (i != std::string::npos)
     {
-        i = lines[k].find('@');//Это строка инструкции
-        if (i != std::string::npos)
-        {
-            i += 27;//Указывает на первый байт инструкции.
-            j = lines[k].find(' ', i);
-            ins = lines[k].substr(i, j-i);
+        i += 27;//Указывает на первый байт инструкции.
+        j = text.find(' ', i);
+        ins = text.substr(i, j-i);
 
-            auto it = instructions.find(ins);
-            if (it != instructions.end())
-                it->second++;
-            else
-                instructions[ins] = 1;
-        }
+        auto it = instructions.find(ins);
+        if (it != instructions.end())
+            it->second++;
+        else
+            instructions[ins] = 1;
+        i = text.find('@', j);
     }
 }
 
@@ -300,9 +280,6 @@ void ShowMemoryUsage(const std::string& code)
 }
 
 //Тест внешней функции и переменной
-#include "external/functions/print.hpp"
-#include "external/variables/test.hpp"
-
 v8::Global<v8::Context> context_;
 v8::Global<v8::ObjectTemplate> global_template_;
 
@@ -378,8 +355,6 @@ void ExternalTest(const std::string& code)
 }
 
 //Тест sha256
-#include "external/functions/sha256.hpp"
-
 void SHA256Test(const std::string& data)
 {
     std::string jscode = "print(meta_sha256(\"" + data + "\"));";
@@ -410,8 +385,6 @@ void SHA256Test(const std::string& data)
 }
 
 //Тест функции проверки сигнатуры
-#include "external/functions/check_sign.hpp"
-
 void SignatureCheckTest()
 {
     std::string jscode = "";
@@ -453,8 +426,6 @@ void SignatureCheckTest()
 }
 
 //Тест функции генерации адреса
-#include "external/functions/address_from_pubkey.hpp"
-
 void CreateAddressTest(const std::string& hex_pubkey)
 {
     std::string jscode = "print(meta_MHC_addr_from_pub_key(\"" + hex_pubkey + "\"))";

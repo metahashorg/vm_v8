@@ -9,10 +9,10 @@ add_definitions(-DSNIPER_LOG_TRACE -DSNIPER_LOG_DEBUG)
 set(PROJECT_HEADERS
 	jscode.h
 	external/functions/print.hpp
-        external/functions/sha256.hpp
-        external/functions/check_sign.hpp
-	external/variables/test.hpp
-	external/functions/address_from_pubkey.hpp
+    external/functions/meta_sha256.hpp
+    external/functions/meta_MHC_check_sign.hpp
+	external/variables/value.hpp
+	external/functions/meta_MHC_addr_from_pub_key.hpp
 	utils.h
     )
 

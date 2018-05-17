@@ -28,5 +28,6 @@ bool CheckBufferSignature(EVP_PKEY* publicKey, const unsigned char* buf,
 bool EVPKEYToAddress(EVP_PKEY* pubkey,
                         uint8_t* out,
                         size_t outsize);
+std::string ReadFile(const std::string& path);
 
 #endif
