@@ -7,5 +7,6 @@ Repository provides examples of how to solve some tasks in C ++ using v8 library
 4. How to read contract's status in the stack.
 5. How to get the amount of memory needed by the virtual machine.<br/>
 6. Пример функции получения sha256-хэша от строки.<br/>
-7. Пример проверки подписи ecdsa и генерации адреса metahash.<br/>
+7. Пример проверки подписи ecdsa.<br/> 
+8. Пример генерации адреса metahash.<br/>
 7. Пример сохранения кэша компилированного js-кода.<br/>
