@@ -1,7 +1,7 @@
 include_directories(.)
-include_directories(../src/v8)
-include_directories(../src/v8/include)
-link_directories(../src/v8/lib)
+include_directories(./src/v8)
+include_directories(./src/v8/include)
+link_directories(./src/v8/lib)
 link_directories(/usr/local/lib/sniper)
 
 add_definitions(-DSNIPER_LOG_TRACE -DSNIPER_LOG_DEBUG)
