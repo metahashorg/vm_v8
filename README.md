@@ -23,7 +23,7 @@ Before launching the utility, it is needed to run the following command:
 export LD_LIBRARY_PATH = $ LD_LIBRARY_PATH: src / v8 / lib
 ```
 
-Features
+## Features
 1. How to get ignition bytecode from the js code.
 2. How to get and parse bytecode with regard to specifying the number of instructions.
 3. How to initialize contract's status in the stack.
