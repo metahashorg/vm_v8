@@ -93,7 +93,7 @@ bool CheckBufferSignature(EVP_PKEY* publicKey, const unsigned char* buf, size_t 
         return false;
 }
 
-#include "RIPEMD160.h"
+#include <openssl/ripemd.h>
 
 bool MhcPubkeyToAddress(uint8_t* in,
                         size_t insize,
@@ -114,7 +114,10 @@ bool MhcPubkeyToAddress(uint8_t* in,
         //Сетевой байт
         out[0] = 0;
         //RIPEMD160-хэш от предыдущего
-        computeRIPEMD160(sha256hash, SHA256_DIGEST_LENGTH, &out[1]);
+        RIPEMD160_CTX ripemd160;
+        RIPEMD160_Init(&ripemd160);
+        RIPEMD160_Update(&ripemd160, sha256hash, SHA256_DIGEST_LENGTH);
+        RIPEMD160_Final(&out[1], &ripemd160);
         //Хэш от RIPEMD-хэша + заголовочный байт
         SHA256_Init(&sha256_secondpass);
         SHA256_Update(&sha256_secondpass, out, 20 + 1);
