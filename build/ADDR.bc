@@ -1,0 +1,243 @@
+LdaConstant [0]
+LdaConstant [0]
+Star r2
+CallRuntime [NewScriptContext], r2-r2
+CallRuntime [NewScriptContext], r2-r2
+PushContext r2
+PushContext r2
+LdaTheHole 
+LdaTheHole 
+StaCurrentContextSlot [4]
+StaCurrentContextSlot [4]
+LdaTheHole 
+StaCurrentContextSlot [5]
+LdaTheHole 
+StaCurrentContextSlot [6]
+LdaTheHole 
+StaCurrentContextSlot [7]
+LdaTheHole 
+StaCurrentContextSlot [8]
+StackCheck 
+StackCheck 
+LdaGlobal [1], [0]
+LdaGlobal [1], [0]
+Star r3
+LdaNamedProperty r3, [2], [2]
+LdaNamedProperty r3, [2], [2]
+Star r3
+CreateClosure [3], [4], #1
+CreateClosure [3], [4], #1
+StaNamedProperty r3, [4], [5]
+StaNamedProperty r3, [4], [5]
+LdaGlobal [5], [7]
+Star r3
+LdaNamedProperty r3, [2], [9]
+Star r3
+CreateClosure [6], [11], #1
+StaNamedProperty r3, [4], [12]
+CreateClosure [7], [14], #0
+StaCurrentContextSlot [4]
+CreateClosure [8], [15], #0
+StaCurrentContextSlot [5]
+LdaTheHole 
+Star r6
+CreateClosure [10], [16], #0
+Star r3
+Star r3
+LdaConstant [9]
+Star r4
+CreateClosure [11], [17], #0
+Star r7
+CreateClosure [12], [18], #0
+Star r8
+Mov r3, r5
+Mov r3, r5
+CallRuntime [DefineClass], r4-r8
+Star r4
+Mov r5, r0
+Ldar r0
+Ldar r0
+StaCurrentContextSlot [6]
+LdaCurrentContextSlot [6]
+LdaCurrentContextSlot [6]
+Star r3
+Construct r3, r0-r0, [19]
+Construct r3, r0-r0, [19]
+StackCheck 
+LdaZero 
+LdaZero 
+StaNamedProperty <this>, [0], [0]
+LdaGlobal [1], [2]
+Star r1
+Construct r1, r0-r0, [4]
+StaNamedProperty <this>, [2], [6]
+LdaUndefined 
+LdaUndefined 
+Return 
+Return 
+StaCurrentContextSlot [7]
+LdaImmutableCurrentContextSlot [4]
+LdaImmutableCurrentContextSlot [4]
+Star r3
+LdaCurrentContextSlot [7]
+Star r4
+CallUndefinedReceiver1 r3, r4, [21]
+CallUndefinedReceiver1 r3, r4, [21]
+StackCheck 
+CreateObjectLiteral [0], [0], #12, r7
+CreateObjectLiteral [0], [0], #12, r7
+Mov r7, r5
+Ldar a0
+JumpIfUndefined [145]
+JumpIfUndefined [145]
+JumpIfNull [143]
+JumpIfNull [143]
+ToObject r7
+ToObject r7
+ForInEnumerate r7
+ForInEnumerate r7
+ForInPrepare r8-r10, [1]
+ForInPrepare r8-r10, [1]
+LdaZero 
+Star r11
+ForInContinue r11, r10
+ForInContinue r11, r10
+JumpIfFalse [128]
+JumpIfFalse [128]
+ForInNext r7, r11, r8-r9, [1]
+ForInNext r7, r11, r8-r9, [1]
+JumpIfUndefined [114]
+Star r6
+StackCheck 
+Star r3
+LdaNamedProperty a0, [1], [2]
+Star r12
+CallProperty1 r12, a0, r6, [4]
+CallProperty1 r12, a0, r6, [4]
+JumpIfToBooleanFalse [96]
+JumpIfToBooleanFalse [96]
+Mov r3, r0
+Ldar r0
+LdaKeyedProperty a0, [6]
+LdaKeyedProperty a0, [6]
+Star r1
+LdaGlobal [2], [8]
+TestInstanceOf r1, [10]
+TestInstanceOf r1, [10]
+JumpIfFalse [6]
+Ldar r1
+TypeOf 
+TypeOf 
+Star r2
+LdaNamedProperty r5, [3], [11]
+Star r13
+LdaNamedProperty r13, [4], [13]
+CreateObjectLiteral [5], [15], #41, r14
+Star r12
+Ldar r3
+StaNamedOwnProperty r14, [6], [16]
+StaNamedOwnProperty r14, [6], [16]
+Ldar r2
+StaNamedOwnProperty r14, [7], [18]
+LdaGlobal [2], [8]
+TestInstanceOf r1, [20]
+JumpIfTrue [9]
+JumpIfTrue [9]
+LdaConstant [8]
+TestEqual r2, [21]
+TestEqual r2, [21]
+JumpIfFalse [14]
+Ldar r1
+StaNamedOwnProperty r14, [10], [26]
+CallProperty1 r12, r13, r14, [28]
+ForInStep r11
+ForInStep r11
+Star r11
+JumpLoop [128], [0]
+JumpLoop [128], [0]
+ForInContinue r11, r10
+JumpIfFalse [128]
+ForInNext r7, r11, r8-r9, [1]
+JumpIfUndefined [114]
+Star r6
+StackCheck 
+Star r3
+LdaNamedProperty a0, [1], [2]
+Star r12
+CallProperty1 r12, a0, r6, [4]
+JumpIfToBooleanFalse [96]
+Mov r3, r0
+Ldar r0
+LdaKeyedProperty a0, [6]
+Star r1
+LdaGlobal [2], [8]
+TestInstanceOf r1, [10]
+JumpIfFalse [6]
+LdaConstant [2]
+Jump [5]
+Jump [5]
+Star r2
+LdaNamedProperty r5, [3], [11]
+Star r13
+LdaNamedProperty r13, [4], [13]
+CreateObjectLiteral [5], [15], #41, r14
+Star r12
+Ldar r3
+StaNamedOwnProperty r14, [6], [16]
+Ldar r2
+StaNamedOwnProperty r14, [7], [18]
+LdaGlobal [2], [8]
+TestInstanceOf r1, [20]
+JumpIfTrue [9]
+LdaNamedProperty r1, [9], [22]
+Star r15
+CallProperty0 r15, r1, [24]
+CallProperty0 r15, r1, [24]
+CreateFunctionContext [0], [1]
+CreateFunctionContext [0], [1]
+PushContext r0
+LdaTheHole 
+StaCurrentContextSlot [4]
+StackCheck 
+CreateEmptyArrayLiteral [0]
+CreateEmptyArrayLiteral [0]
+StaCurrentContextSlot [4]
+LdaNamedProperty <this>, [1], [1]
+Star r1
+CreateClosure [2], [3], #2
+Star r3
+CallProperty1 r1, <this>, r3, [4]
+LdaImmutableCurrentContextSlot [4]
+Return 
+Jump [4]
+StaNamedOwnProperty r14, [10], [26]
+CallProperty1 r12, r13, r14, [28]
+ForInStep r11
+Star r11
+JumpLoop [128], [0]
+ForInContinue r11, r10
+JumpIfFalse [128]
+ForInNext r7, r11, r8-r9, [1]
+JumpIfUndefined [114]
+Star r6
+StackCheck 
+Star r3
+LdaNamedProperty a0, [1], [2]
+Star r12
+CallProperty1 r12, a0, r6, [4]
+JumpIfToBooleanFalse [96]
+ForInStep r11
+Star r11
+JumpLoop [128], [0]
+ForInContinue r11, r10
+JumpIfFalse [128]
+LdaGlobal [11], [30]
+Star r8
+LdaNamedProperty r8, [12], [32]
+Star r7
+CallProperty1 r7, r8, r5, [34]
+Return 
+StaCurrentContextSlot [8]
+LdaCurrentContextSlot [8]
+Star r1
+Return 
