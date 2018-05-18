@@ -24,12 +24,62 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:src/v8/lib
 ```
 
 ## Features
-1. How to get ignition bytecode from the js code.
-2. How to get and parse bytecode with regard to specifying the number of instructions.
-3. How to initialize contract's status in the stack.
-4. How to read contract's status in the stack.
-5. How to get the amount of memory needed by the virtual machine.
-6. How to generate SHA-256 hash of a string.
-7. How to verify ECDSA signature.
-8. How to get Metahash address. 
-9. How to save compiled js code cache.
+1. Output of the bytecode which corresponds to the code compiled from js file:
+```shell
+./vm_v8 -mode 0 [path to the file containing js-code]
+```
+> Program redirects the output of ignition compiler to the console.
+
+2. Counting the number of bytecode instructions for each type of the bytecode.
+```shell
+./vm_v8 -mode 1 [path to the file containing js-code]
+```
+
+3. Gaining information about the amount of memory allocated during running the script. Two indicators are displayed: heap size and amount of allocated memory.
+```shell
+./vm_v8 -mode 2 [path to the file containing js-code]
+```
+
+4. Initialization of contract directly in the process memory.
+```shell
+(under development)
+```
+
+5. Reading contract's status directly from the memory.
+```shell
+(under development)
+```
+
+6. Testing the work with external variable and function.
+```shell
+./vm_v8 -mode 5 [number]
+```
+> Program shows the entered number stored in the native variable using the native function.
+
+7. Generating SHA-256 hash for a string (js-function: meta_sha256).
+```shell
+./vm_v8 -mode 6 [string]
+```
+
+8. Verifying ECDSA signature (js-function: meta_MHC_check_sign).
+```shell
+ ./vm_v8 -mode 7
+ ```
+> There is no input data. Values are checked by default.
+
+9. Generating address on the public key.
+```shell
+./vm_v8 -mode 8 [public key in the form of hex string]
+```
+
+
+10. Generating cache of the compiled code.
+```shell
+./vm_v8 -mode 9 [address] [path to the file containing js-code]
+```
+> There will be 3 files created:
+>```shell
+>       1. [address].dbg  #  debug info.
+>       2. [address].bt  #  bytecode listing output.
+>       3. [address].cmpl  #  compiler cache.
+>```
