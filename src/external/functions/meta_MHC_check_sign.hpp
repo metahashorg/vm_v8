@@ -52,7 +52,9 @@ void check_sign(const v8::FunctionCallbackInfo<v8::Value>& args)
             if (signature)
             {
                 result = CheckBufferSignature(pk, (const unsigned char*)data.data(), data.size(), signature);
+                ECDSA_SIG_free(signature);
             }
+            EVP_PKEY_free(pk);
         }
 
     }

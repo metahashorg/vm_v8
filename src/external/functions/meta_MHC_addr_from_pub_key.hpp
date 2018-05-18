@@ -32,7 +32,10 @@ void address_from_pubkey(const v8::FunctionCallbackInfo<v8::Value>& args)
             {
                 hexaddress = "0x" + DumpToHexString((const uint8_t*)address, ADDRESS_LENGTH);
             }
+            EVP_PKEY_free(pk);
         }
+        else
+            printf("%s: Public key format error\n", __FUNCTION__);
     }
 
     args.GetReturnValue().Set(v8::String::NewFromUtf8(isolate, hexaddress.c_str()));

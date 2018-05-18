@@ -35,45 +35,33 @@ void HexStringToDump(const std::string& hexstr, std::vector<uint8_t>& dump)
 
 EVP_PKEY* ParseDER(unsigned char* binary, size_t binarysize)
 {
-    bool result = false;
     EVP_PKEY* key = NULL;
     if (binary && binarysize != 0)
     {
-        key = EVP_PKEY_new();
-        if (key)
-        {
-            if (d2i_PUBKEY(&key, (const unsigned char**)&binary, binarysize))
-                result = true;
-            else
-                printf("%s: i2d_PUBKEY error.\n", __FUNCTION__);
-        }
+        if (d2i_PUBKEY(&key, (const unsigned char**)&binary, binarysize))
+            return key;
     }
-    else
-        printf("%s: Invalid parameters.\n", __FUNCTION__);
-
-    if (result)
-        return key;
-    else
-    {
-        EVP_PKEY_free(key);
-        return NULL;
-    }
+    return NULL;
 }
 
 ECDSA_SIG* ECSignatureFromBuffer(unsigned char* buff, size_t bufsize, EVP_PKEY* key)
 {
+    ECDSA_SIG* signature = NULL;
     EC_KEY* eckey = EVP_PKEY_get1_EC_KEY(key);
-    unsigned int degree = EC_GROUP_get_degree(EC_KEY_get0_group(eckey));
-    unsigned int bn_len = (degree + 7) / 8;
-    ECDSA_SIG* signature = ECDSA_SIG_new();
-    BIGNUM* r = BN_bin2bn(buff, bn_len, NULL);
-    BIGNUM* s = BN_bin2bn(buff + bn_len, bn_len, NULL);
-    if (r && s)
+    if (eckey)
     {
-        ECDSA_SIG_set0(signature, r, s);
-        return signature;
+        unsigned int degree = EC_GROUP_get_degree(EC_KEY_get0_group(eckey));
+        unsigned int bn_len = (degree + 7) / 8;
+        EC_KEY_free(eckey);
+        BIGNUM* r = BN_bin2bn(buff, bn_len, NULL);
+        BIGNUM* s = BN_bin2bn(buff + bn_len, bn_len, NULL);
+        if (r && s)
+        {
+            signature = ECDSA_SIG_new();
+            ECDSA_SIG_set0(signature, r, s);
+        }
     }
-    return NULL;
+    return signature;
 }
 
 bool CheckBufferSignature(EVP_PKEY* publicKey, const unsigned char* buf, size_t bufsize, ECDSA_SIG* signature)

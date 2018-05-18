@@ -314,7 +314,7 @@ void ExternalTest(const std::string& code)
         v8::Local<v8::Context> context = v8::Context::New(isolate, NULL, global);
         v8::Context::Scope context_scope(context);
         context_.Reset(isolate, context);
-        //Устанавливаем объект типа Data кака переменную
+        //Устанавливаем объект типа Data как внешнюю переменную
         InstallObjects(isolate, &data);
         v8::Local<v8::String> source =
         v8::String::NewFromUtf8(isolate,
@@ -325,7 +325,6 @@ void ExternalTest(const std::string& code)
         v8::Script::Compile(context, source).ToLocalChecked();
         script->Run(context).ToLocalChecked();
     }
-    //isolate->Dispose();
     v8::V8::Dispose();
     v8::V8::ShutdownPlatform();
     delete create_params.array_buffer_allocator;
