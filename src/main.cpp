@@ -94,17 +94,17 @@ bool ParseCmdLine(int argc, char** argv, CmdLine& cmdline)
 void Usage(const char* progname)
 {
     printf(
-            "Usage: ./%s -mode [0-2] [js file path]\n"
-            "0 - show bytecode\n"
-            "1 - instructions count\n"
-            "2 - show memory usage\n"
+            "Usage: %s \n"
+            "-mode 0  [js file path] - show bytecode\n"
+            "-mode 1  [js file path] - instructions count\n"
+            "-mode 2  [js file path] - show memory usage\n"
             "3 - initialization of the contract status in the stack (Not ready yet)\n"
-            "4 - read the status of a contract from the stack\n"
-            "5 - external variable and function test\n"
-            "6 - sha256 function test\n"
-            "7 - signature test\n"
-            "8 - address test\n"
-            "9 - compile test\n"
+            "4 - read the status of a contract from the stack (Not ready yet)\n"
+            "-mode 5  [integer] - external variable and function test\n"
+            "-mode 6  [string] - sha256 function test\n"
+            "-mode 7 - signature test\n"
+            "-mode 8 [pubkey(hex string)] - address test\n"
+            "-mode 9 [address] [js file path] - compile test\n"
             ,
             progname
         );
