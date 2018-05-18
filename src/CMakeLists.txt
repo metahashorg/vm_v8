@@ -1,7 +1,7 @@
 include_directories(.)
-include_directories(../opt/v8custom)
-include_directories(../opt/v8custom/include)
-link_directories(../opt/v8custom/lib)
+include_directories(../src/v8)
+include_directories(../src/v8/include)
+link_directories(../src/v8/lib)
 link_directories(/usr/local/lib/sniper)
 
 add_definitions(-DSNIPER_LOG_TRACE -DSNIPER_LOG_DEBUG)
@@ -26,7 +26,7 @@ set(PROJECT_MAIN
     stdcapture.hpp
     main.cpp
     )
-
+	
 #Threads
 find_package(Threads)
 find_package(fmt REQUIRED)

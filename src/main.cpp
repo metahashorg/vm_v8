@@ -182,29 +182,6 @@ std::string GetBytecode(const char* jscode, std::string& err, std::string& cmpl)
     return bytecode;
 }
 
-void ParseBytecode(const std::string& bytecode, std::unordered_map<std::string, size_t>& instructions)
-{
-    std::string ins = "";
-    std::string remainder = "";
-    std::string text = bytecode;
-    size_t i = 0;
-    size_t j = 0;
-    i = text.find('@');
-    while (i != std::string::npos)
-    {
-        i += 27;//Указывает на первый байт инструкции.
-        j = text.find(' ', i);
-        ins = text.substr(i, j-i);
-
-        auto it = instructions.find(ins);
-        if (it != instructions.end())
-            it->second++;
-        else
-            instructions[ins] = 1;
-        i = text.find('@', j);
-    }
-}
-
 //Измерение колл-ва памяти
 std::unordered_map<std::string, int> g_counters;
 
@@ -459,8 +436,8 @@ void CreateAddressTest(const std::string& hex_pubkey)
 //Тест компиляции
 void CompileTest(const std::string& address, const std::string& code)
 {
-    std::string dbgfilepath = address + ".dbg";
-    std::string btfilepath = address + ".bt";
+    std::string dbgfilepath = address + ".dbgi";
+    std::string btfilepath = address + ".bc";
     std::string cmplfilepath = address + ".cmpl";
     std::ofstream dbgfile(dbgfilepath, std::ios::out | std::ios::app);
     std::ofstream btfile(btfilepath, std::ios::out | std::ios::app);
@@ -474,25 +451,15 @@ void CompileTest(const std::string& address, const std::string& code)
     std::string err = "";
     std::string cmpl = "";
     std::string bytecode = GetBytecode(code.c_str(), err, cmpl);
-    if (bytecode.empty())//Произошла ошибка выполнения
-    {
-        debuglog += err;
-        dbgfile << debuglog;
-    }
-    else
+    if (!bytecode.empty())//Произошла ошибка выполнения
     {
         //Создаем файл с байткодом
-        btfile << bytecode;
-        btfile.close();
+        dbgfile << bytecode;
+        btfile << BytecodeToListing(bytecode);
         if (err.empty())//Ошибок при создании компилированного кода тоже не было
         {
             //Cохраняем компилированный скрипт в ADDR.cmpl
             cmplfile << cmpl;
-        }
-        else
-        {
-            debuglog += err;
-            dbgfile << debuglog;
         }
     }
     dbgfile.close();

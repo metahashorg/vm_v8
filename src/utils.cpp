@@ -173,3 +173,46 @@ std::string ReadFile(const std::string& path)
     }
     return str;
 }
+
+void ParseBytecode(const std::string& bytecode, std::unordered_map<std::string, size_t>& instructions)
+{
+    std::string ins = "";
+    std::string remainder = "";
+    std::string text = bytecode;
+    size_t i = 0;
+    size_t j = 0;
+    i = text.find('@');
+    while (i != std::string::npos)
+    {
+        i += 27;//Указывает на первый байт инструкции.
+        j = text.find(' ', i);
+        ins = text.substr(i, j-i);
+
+        auto it = instructions.find(ins);
+        if (it != instructions.end())
+            it->second++;
+        else
+            instructions[ins] = 1;
+        i = text.find('@', j);
+    }
+}
+
+std::string BytecodeToListing(const std::string& bytecode)
+{
+    std::string listing = "";
+    std::string ins = "";
+    std::string remainder = "";
+    std::string text = bytecode;
+    size_t i = 0;
+    size_t j = 0;
+    i = text.find('@');
+    while (i != std::string::npos)
+    {
+        i += 27;//Указывает на первый байт инструкции.
+        j = text.find(0x0A, i);
+        ins = text.substr(i, j-i);
+        listing += ins + '\n';
+        i = text.find('@', j);
+    }
+    return listing;
+}

@@ -1,5 +1,6 @@
 #include <string>
 #include <vector>
+#include <unordered_map>
 #include <openssl/opensslconf.h>
 #include <openssl/ec.h>
 #include <openssl/obj_mac.h>
@@ -29,5 +30,7 @@ bool EVPKEYToAddress(EVP_PKEY* pubkey,
                         uint8_t* out,
                         size_t outsize);
 std::string ReadFile(const std::string& path);
+std::string BytecodeToListing(const std::string& bytecode);
+void ParseBytecode(const std::string& bytecode, std::unordered_map<std::string, size_t>& instructions);
 
 #endif
