@@ -17,11 +17,16 @@
 #ifndef CHECK_SIGN_FUNCTION
 #define CHECK_SIGN_FUNCTION
 
+extern std::ofstream g_errorlog;
+
 void check_sign(const v8::FunctionCallbackInfo<v8::Value>& args)
 {
     bool result = false;
-    if (args.Length() < 3)
+    if (args.Length() != 3)
+    {
+        g_errorlog << "Invalid arguments(" << __FUNCTION__ << ")" << std::endl;
         return;
+    }
 
     v8::Isolate* isolate = args.GetIsolate();
     v8::TryCatch try_catch(isolate);
@@ -54,10 +59,17 @@ void check_sign(const v8::FunctionCallbackInfo<v8::Value>& args)
                 result = CheckBufferSignature(pk, (const unsigned char*)data.data(), data.size(), signature);
                 ECDSA_SIG_free(signature);
             }
+            else
+                g_errorlog << "Invalid signature format(" <<  __FUNCTION__ << ")" << std::endl;
+
             EVP_PKEY_free(pk);
         }
+        else
+            g_errorlog << "Public key format error(" <<  __FUNCTION__ << ")" << std::endl;
 
     }
+    else
+        g_errorlog << "Invalid argument type(" << __FUNCTION__ << ")" << std::endl;
 
     args.GetReturnValue().Set(v8::Boolean::New(isolate, result));
 }

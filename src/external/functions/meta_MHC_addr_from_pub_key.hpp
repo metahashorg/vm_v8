@@ -6,11 +6,16 @@
 #ifndef ADDR_FROM_PUBKEY_FUNCTION
 #define ADDR_FROM_PUBKEY_FUNCTION
 
+extern std::ofstream g_errorlog;
+
 void address_from_pubkey(const v8::FunctionCallbackInfo<v8::Value>& args)
 {
     std::string hexaddress = "";
     if (args.Length() != 1)
+    {
+        g_errorlog << "Invalid arguments(" << __FUNCTION__ << ")" << std::endl;
         return;
+    }
 
     v8::Isolate* isolate = args.GetIsolate();
     v8::TryCatch try_catch(isolate);
@@ -32,11 +37,16 @@ void address_from_pubkey(const v8::FunctionCallbackInfo<v8::Value>& args)
             {
                 hexaddress = "0x" + DumpToHexString((const uint8_t*)address, ADDRESS_LENGTH);
             }
+            else
+                g_errorlog << "Public key to address conversion error(" <<  __FUNCTION__ << ")" << std::endl;
+
             EVP_PKEY_free(pk);
         }
         else
-            printf("%s: Public key format error\n", __FUNCTION__);
+            g_errorlog << "Public key format error(" <<  __FUNCTION__ << ")" << std::endl;
     }
+    else
+        g_errorlog << "Invalid argument type(" << __FUNCTION__ << ")" << std::endl;
 
     args.GetReturnValue().Set(v8::String::NewFromUtf8(isolate, hexaddress.c_str()));
 }

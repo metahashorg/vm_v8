@@ -23,6 +23,9 @@
 #include "external/functions/meta_MHC_check_sign.hpp"
 #include "external/functions/meta_MHC_addr_from_pub_key.hpp"
 
+//Лог програмных ошибок и ошибок js
+std::ofstream g_errorlog;
+
 //командная строка
 enum Mode
 {
@@ -110,12 +113,11 @@ void Usage(const char* progname)
         );
 }
 
-std::string GetBytecode(const char* jscode, std::string& err, std::string& cmpl)
+std::string GetBytecode(const char* jscode, std::string& cmpl)
 {
     StdCapture out;
     out.BeginCapture();
     std::string bytecode = "";
-    err.clear();
     cmpl.clear();
     //Установка флага вывода байткода
     v8::V8::SetFlagsFromString("--trace-ignition", 16);
@@ -138,7 +140,7 @@ std::string GetBytecode(const char* jscode, std::string& err, std::string& cmpl)
         if (!v8::Script::Compile(context, source).ToLocal(&script))
         {
             v8::String::Utf8Value error(isolate, try_catch.Exception());
-            err = *error;
+            g_errorlog << "Compile error(" << __FUNCTION__ << "):" << *error << std::endl;
             return "";
         }
 
@@ -149,7 +151,7 @@ std::string GetBytecode(const char* jscode, std::string& err, std::string& cmpl)
             if (!val->IsTrue())
             {
                 v8::String::Utf8Value error(isolate, try_catch.Exception());
-                err = *error;
+                g_errorlog << "Run error(" << __FUNCTION__ << "):" << *error << std::endl;
                 return "";
             }
         }
@@ -163,12 +165,11 @@ std::string GetBytecode(const char* jscode, std::string& err, std::string& cmpl)
         v8::Local<v8::UnboundScript> unboundscript = v8::ScriptCompiler::CompileUnboundScript(isolate, &src, v8::ScriptCompiler::kProduceFullCodeCache).ToLocalChecked();
         v8::ScriptCompiler::CachedData* data = v8::ScriptCompiler::CreateCodeCache(unboundscript);
         if (data && data->length)
-        {
-            cmpl.resize(data->length);
-            memcpy((void*)cmpl.data(), data->data, data->length);
-        }
+            cmpl.assign((const char*)data->data, data->length);
         else
-            err += "Can not create code cache\n";
+        {
+            g_errorlog << "(" << __FUNCTION__ << "):Can not create code cache" << std::endl;
+        }
 
         v8::String::Utf8Value utf8(isolate, result);
         out.EndCapture();
@@ -226,12 +227,15 @@ void DumpCounters(v8::Isolate* isolate)
         for (auto it : g_counters)
             printf("%s = %d\n", it.first.c_str(), it.second);
     }
+    else
+        g_errorlog << "(" << __FUNCTION__ << "):Memory counters not found" << std::endl;
 }
 
 void RunScript(v8::Isolate* isolate, const std::string& code)
 {
     v8::Isolate::Scope isolate_scope(isolate);
     v8::HandleScope handle_scope(isolate);
+    v8::TryCatch try_catch(isolate);
     v8::Local<v8::Context> context = v8::Context::New(isolate);
     v8::Context::Scope context_scope(context);
 
@@ -240,10 +244,24 @@ void RunScript(v8::Isolate* isolate, const std::string& code)
                     code.c_str(),
                     v8::NewStringType::kNormal).ToLocalChecked();
 
-    v8::Local<v8::Script> script =
-    v8::Script::Compile(context, source).ToLocalChecked();
-    v8::Local<v8::Value> result = script->Run(context).ToLocalChecked();
-    (void)result;
+    v8::Local<v8::Script> script;
+    if (!v8::Script::Compile(context, source).ToLocal(&script))
+    {
+        v8::String::Utf8Value error(isolate, try_catch.Exception());
+        g_errorlog << "Compile error(" << __FUNCTION__ << "):" << *error << std::endl;
+        return;
+    }
+
+    v8::Local<v8::Value> result;
+    if (!script->Run(context).ToLocal(&result))
+    {
+        v8::Local<v8::Value> val = try_catch.Exception();
+        if (!val->IsTrue())
+        {
+            v8::String::Utf8Value error(isolate, try_catch.Exception());
+            g_errorlog << "Run error(" << __FUNCTION__ << "):" << *error << std::endl;
+        }
+    }
 }
 
 void ShowMemoryUsage(const std::string& code)
@@ -308,6 +326,7 @@ void ExternalTest(const std::string& code)
     {
         v8::Isolate::Scope isolate_scope(isolate);
         v8::HandleScope handle_scope(isolate);
+        v8::TryCatch try_catch(isolate);
         v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
         //Регистрируем функцию печати
         AddPrint(&global, isolate);
@@ -321,9 +340,24 @@ void ExternalTest(const std::string& code)
                                 jscode.c_str(),
                                 v8::NewStringType::kNormal).ToLocalChecked();
 
-        v8::Local<v8::Script> script =
-        v8::Script::Compile(context, source).ToLocalChecked();
-        script->Run(context).ToLocalChecked();
+        v8::Local<v8::Script> script;
+        if (!v8::Script::Compile(context, source).ToLocal(&script))
+        {
+            v8::String::Utf8Value error(isolate, try_catch.Exception());
+            g_errorlog << "Compile error(" << __FUNCTION__ << "):" << *error << std::endl;
+            return;
+        }
+
+        v8::Local<v8::Value> result;
+        if (!script->Run(context).ToLocal(&result))
+        {
+            v8::Local<v8::Value> val = try_catch.Exception();
+            if (!val->IsTrue())
+            {
+                v8::String::Utf8Value error(isolate, try_catch.Exception());
+                g_errorlog << "Run error(" << __FUNCTION__ << "):" << *error << std::endl;
+            }
+        }
     }
     v8::V8::Dispose();
     v8::V8::ShutdownPlatform();
@@ -340,6 +374,7 @@ void SHA256Test(const std::string& data)
     {
         v8::Isolate::Scope isolate_scope(isolate);
         v8::HandleScope handle_scope(isolate);
+        v8::TryCatch try_catch(isolate);
         v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
         AddSHA256(&global, isolate);
         AddPrint(&global, isolate);
@@ -350,9 +385,24 @@ void SHA256Test(const std::string& data)
                                 jscode.c_str(),
                                 v8::NewStringType::kNormal).ToLocalChecked();
 
-        v8::Local<v8::Script> script =
-        v8::Script::Compile(context, source).ToLocalChecked();
-        script->Run(context).ToLocalChecked();
+        v8::Local<v8::Script> script;
+        if (!v8::Script::Compile(context, source).ToLocal(&script))
+        {
+            v8::String::Utf8Value error(isolate, try_catch.Exception());
+            g_errorlog << "Compile error(" << __FUNCTION__ << "):" << *error << std::endl;
+            return;
+        }
+
+        v8::Local<v8::Value> result;
+        if (!script->Run(context).ToLocal(&result))
+        {
+            v8::Local<v8::Value> val = try_catch.Exception();
+            if (!val->IsTrue())
+            {
+                v8::String::Utf8Value error(isolate, try_catch.Exception());
+                g_errorlog << "Run error(" << __FUNCTION__ << "):" << *error << std::endl;
+            }
+        }
     }
     isolate->Dispose();
     v8::V8::Dispose();
@@ -381,6 +431,7 @@ void SignatureCheckTest()
     {
         v8::Isolate::Scope isolate_scope(isolate);
         v8::HandleScope handle_scope(isolate);
+        v8::TryCatch try_catch(isolate);
         v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
         AddCheckSign(&global, isolate);
         AddPrint(&global, isolate);
@@ -391,9 +442,24 @@ void SignatureCheckTest()
                                 jscode.c_str(),
                                 v8::NewStringType::kNormal).ToLocalChecked();
 
-        v8::Local<v8::Script> script =
-        v8::Script::Compile(context, source).ToLocalChecked();
-        script->Run(context).ToLocalChecked();
+        v8::Local<v8::Script> script;
+        if (!v8::Script::Compile(context, source).ToLocal(&script))
+        {
+            v8::String::Utf8Value error(isolate, try_catch.Exception());
+            g_errorlog << "Compile error(" << __FUNCTION__ << "):" << *error << std::endl;
+            return;
+        }
+
+        v8::Local<v8::Value> result;
+        if (!script->Run(context).ToLocal(&result))
+        {
+            v8::Local<v8::Value> val = try_catch.Exception();
+            if (!val->IsTrue())
+            {
+                v8::String::Utf8Value error(isolate, try_catch.Exception());
+                g_errorlog << "Run error(" << __FUNCTION__ << "):" << *error << std::endl;
+            }
+        }
     }
     isolate->Dispose();
     v8::V8::Dispose();
@@ -412,6 +478,7 @@ void CreateAddressTest(const std::string& hex_pubkey)
     {
         v8::Isolate::Scope isolate_scope(isolate);
         v8::HandleScope handle_scope(isolate);
+        v8::TryCatch try_catch(isolate);
         v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
         AddAddressFromPubkey(&global, isolate);
         AddPrint(&global, isolate);
@@ -422,9 +489,24 @@ void CreateAddressTest(const std::string& hex_pubkey)
                                 jscode.c_str(),
                                 v8::NewStringType::kNormal).ToLocalChecked();
 
-        v8::Local<v8::Script> script =
-        v8::Script::Compile(context, source).ToLocalChecked();
-        script->Run(context).ToLocalChecked();
+        v8::Local<v8::Script> script;
+        if (!v8::Script::Compile(context, source).ToLocal(&script))
+        {
+            v8::String::Utf8Value error(isolate, try_catch.Exception());
+            g_errorlog << "Compile error(" << __FUNCTION__ << "):" << *error << std::endl;
+            return;
+        }
+
+        v8::Local<v8::Value> result;
+        if (!script->Run(context).ToLocal(&result))
+        {
+            v8::Local<v8::Value> val = try_catch.Exception();
+            if (!val->IsTrue())
+            {
+                v8::String::Utf8Value error(isolate, try_catch.Exception());
+                g_errorlog << "Run error(" << __FUNCTION__ << "):" << *error << std::endl;
+            }
+        }
     }
     isolate->Dispose();
     v8::V8::Dispose();
@@ -447,15 +529,14 @@ void CompileTest(const std::string& address, const std::string& code)
         return;
     }
     std::string debuglog = "";
-    std::string err = "";
     std::string cmpl = "";
-    std::string bytecode = GetBytecode(code.c_str(), err, cmpl);
+    std::string bytecode = GetBytecode(code.c_str(), cmpl);
     if (!bytecode.empty())//Произошла ошибка выполнения
     {
         //Создаем файл с байткодом
         dbgfile << bytecode;
         btfile << BytecodeToListing(bytecode);
-        if (err.empty())//Ошибок при создании компилированного кода тоже не было
+        if (!cmpl.empty())//Ошибок при создании компилированного кода тоже не было
         {
             //Cохраняем компилированный скрипт в ADDR.cmpl
             cmplfile << cmpl;
@@ -468,6 +549,13 @@ void CompileTest(const std::string& address, const std::string& code)
 
 int main(int argc, char* argv[])
 {
+    g_errorlog.open ("err.log", std::ofstream::out | std::ofstream::app);
+    if (!g_errorlog)
+    {
+        printf("Can not open error log.\n");
+        return 0;
+    }
+
     v8::V8::InitializeICUDefaultLocation(argv[0]);
     v8::V8::InitializeExternalStartupData(argv[0]);
     std::unique_ptr<v8::Platform> platform =  std::unique_ptr<v8::Platform>(v8::platform::CreateDefaultPlatform());
@@ -480,22 +568,25 @@ int main(int argc, char* argv[])
 
     CmdLine cmdline;
     std::string bytecode;
-    std::string err;
     std::string cmpl;
     if (ParseCmdLine(argc, argv, cmdline))
     {
         if (cmdline.mode == SHOW_BYTECODE)
         {
-            bytecode = GetBytecode(cmdline.code.c_str(), err, cmpl);
-            printf("%s\n", bytecode.c_str());
+            bytecode = GetBytecode(cmdline.code.c_str(), cmpl);
+            if (!bytecode.empty())
+                printf("%s\n", bytecode.c_str());
         }
         if (cmdline.mode == INS_COUNT)
         {
             std::unordered_map<std::string, size_t> instructions;
-            bytecode = GetBytecode(cmdline.code.c_str(), err, cmpl);
-            ParseBytecode(bytecode, instructions);
-            for (auto it = instructions.begin(); it != instructions.end(); ++it)
-                printf("%s = %ld\n", it->first.c_str(),  it->second);
+            bytecode = GetBytecode(cmdline.code.c_str(), cmpl);
+            if (!bytecode.empty())
+            {
+                ParseBytecode(bytecode, instructions);
+                for (auto it = instructions.begin(); it != instructions.end(); ++it)
+                    printf("%s = %ld\n", it->first.c_str(),  it->second);
+            }
         }
         if (cmdline.mode == MEMORY_USAGE)
             ShowMemoryUsage(cmdline.code);
@@ -515,6 +606,6 @@ int main(int argc, char* argv[])
         printf("Invalid command line.\n");
         Usage(argv[0]);
     }
-
+    g_errorlog.close();
     return 0;
 }

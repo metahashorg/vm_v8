@@ -4,11 +4,16 @@
 #ifndef SHA256_FUNCTION
 #define SHA256_FUNCTION
 
+extern std::ofstream g_errorlog;
+
 void sha256(const v8::FunctionCallbackInfo<v8::Value>& args)
 {
     std::string hs = "";
-    if (args.Length() < 1)
+    if (args.Length() != 1)
+    {
+        g_errorlog << "Invalid arguments(" << __FUNCTION__ << ")" << std::endl;
         return;
+    }
 
     v8::Isolate* isolate = args.GetIsolate();
     v8::TryCatch try_catch(isolate);
@@ -26,6 +31,9 @@ void sha256(const v8::FunctionCallbackInfo<v8::Value>& args)
         SHA256_Final(sha256hash, &sha256_pass);
         hs = DumpToHexString(sha256hash, SHA256_DIGEST_LENGTH);
     }
+    else
+        g_errorlog << "Invalid argument type(" << __FUNCTION__ << ")" << std::endl;
+
     args.GetReturnValue().Set(v8::String::NewFromUtf8(isolate, hs.c_str()));
 }
 

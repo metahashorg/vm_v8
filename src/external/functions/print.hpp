@@ -4,10 +4,15 @@
 #ifndef PRINT_FUNCTION
 #define PRINT_FUNCTION
 
+extern std::ofstream g_errorlog;
+
 void print(const v8::FunctionCallbackInfo<v8::Value>& args)
 {
-    if (args.Length() < 1)
+    if (args.Length() != 1)
+    {
+        g_errorlog << "Invalid arguments(" << __FUNCTION__ << ")" << std::endl;
         return;
+    }
 
     v8::Isolate* isolate = args.GetIsolate();
     v8::TryCatch try_catch(isolate);
@@ -18,10 +23,15 @@ void print(const v8::FunctionCallbackInfo<v8::Value>& args)
         int val = arg->ToUint32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
         printf("%d\n", val);
     }
-    if (arg->IsString())
+    else
     {
-        v8::String::Utf8Value param1(arg->ToString());
-        printf("%s\n", *param1);
+        if (arg->IsString())
+        {
+            v8::String::Utf8Value param1(arg->ToString());
+            printf("%s\n", *param1);
+        }
+        else
+            g_errorlog << "Invalid argument type(" << __FUNCTION__ << ")" << std::endl;
     }
 }
 
