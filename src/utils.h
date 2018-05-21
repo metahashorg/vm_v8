@@ -32,5 +32,6 @@ bool EVPKEYToAddress(EVP_PKEY* pubkey,
 std::string ReadFile(const std::string& path);
 std::string BytecodeToListing(const std::string& bytecode);
 void ParseBytecode(const std::string& bytecode, std::unordered_map<std::string, size_t>& instructions);
+std::string RemoveColorCharacters(const std::string& text);
 
 #endif

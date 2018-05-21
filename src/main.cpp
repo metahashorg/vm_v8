@@ -533,7 +533,6 @@ void CompileTest(const std::string& address, const std::string& code)
     std::string bytecode = GetBytecode(code.c_str(), cmpl);
     if (!bytecode.empty())//Произошла ошибка выполнения
     {
-        //Создаем файл с байткодом
         dbgfile << bytecode;
         btfile << BytecodeToListing(bytecode);
         if (!cmpl.empty())//Ошибок при создании компилированного кода тоже не было

@@ -1,7 +1,9 @@
 #include "utils.h"
 
 #include <fstream>
+#include <regex>
 #include <openssl/ripemd.h>
+#include <re2/re2.h>
 
 std::string DumpToHexString(const uint8_t* dump, uint32_t dumpsize)
 {
