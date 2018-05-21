@@ -52,9 +52,9 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:src/v8/lib
 
 6. Testing the work with external variable and function.
 ```shell
-./vm_v8 -mode 5 [number]
+./vm_v8 -mode 5 [int32]
 ```
-> Program shows the entered number stored in the native variable using the native function.
+> Program shows the entered value stored in the native variable using the native function.
 
 7. Generating SHA-256 hash for a string (js-function: meta_sha256).
 ```shell
