@@ -38,7 +38,8 @@ enum Mode
     SHA256_TEST,
     SIGNATURE_TEST,
     ADDRESS_TEST,
-    COMPILE_TEST
+    COMPILE_TEST,
+    STATE_TEST
 };
 
 struct CmdLine
@@ -46,6 +47,10 @@ struct CmdLine
     Mode mode;
     std::string code;
     std::string address;
+	std::string codecache;
+	std::string command;
+	std::string insnap;
+	std::string outsnap;
 };
 
 bool ParseCmdLine(int argc, char** argv, CmdLine& cmdline)
@@ -90,6 +95,35 @@ bool ParseCmdLine(int argc, char** argv, CmdLine& cmdline)
             cmdline.code = ReadFile(argv[4]);
             result = true;
         }
+        if (mode == STATE_TEST && (argc == 13 || argc == 15))
+        {
+            if (strcmp(argv[3], "-a") == 0 &&
+                strcmp(argv[5], "-js") == 0 &&
+                strcmp(argv[7], "-cmpl") == 0 &&
+                strcmp(argv[9], "-cmd") == 0)
+            {
+                cmdline.mode = STATE_TEST;
+                cmdline.address = argv[4];
+                cmdline.code = ReadFile(argv[6]);
+                cmdline.codecache = ReadFile(argv[8]);
+                cmdline.command = ReadFile(argv[9]);
+                if (strcmp(argv[11], "-snap_i") == 0 && argc == 15)//Входной снимок представлен
+                {
+                    cmdline.insnap = ReadFile(argv[12]);
+                    cmdline.outsnap = argv[14];
+                    result = true;
+                }
+                else
+                {
+                    if (strcmp(argv[11], "-snap_o") == 0 && argc == 13)//Входной снимок отсутствует
+                    {
+                        cmdline.outsnap = argv[14];
+                        result = true;
+                    }
+                }
+            }
+        }
+
     }
     return result;
 }
@@ -546,6 +580,180 @@ void CompileTest(const std::string& address, const std::string& code)
     cmplfile.close();
 }
 
+//Куча разных вспомогательных функций
+static void SerializedCallback(
+    const v8::FunctionCallbackInfo<v8::Value>& args)
+{
+  args.GetReturnValue().Set(v8::Integer::New(v8::Isolate::GetCurrent(), 10));
+}
+
+static void SerializedCallbackReplacement(
+    const v8::FunctionCallbackInfo<v8::Value>& args)
+{
+  args.GetReturnValue().Set(v8::Integer::New(v8::Isolate::GetCurrent(), 10));
+}
+
+static void NamedPropertyGetterForSerialization(
+    v8::Local<v8::Name> name, const v8::PropertyCallbackInfo<v8::Value>& info)
+{
+  if (name->Equals(info.GetIsolate()->GetCurrentContext(), v8::String::NewFromUtf8(v8::Isolate::GetCurrent(),
+                                "x",
+                                v8::NewStringType::kNormal).ToLocalChecked())
+          .FromJust()) {
+    info.GetReturnValue().Set(v8::Integer::New(v8::Isolate::GetCurrent(), 10));
+  }
+}
+
+static void AccessorForSerialization(
+    v8::Local<v8::String> property,
+    const v8::PropertyCallbackInfo<v8::Value>& info)
+{
+  info.GetReturnValue().Set(v8::Integer::New(v8::Isolate::GetCurrent(), 10));
+}
+
+static int serialized_static_field = 314;
+
+class SerializedExtension : public v8::Extension
+{
+ public:
+  SerializedExtension()
+      : v8::Extension("serialized extension",
+                      "native function g();"
+                      "function h() { return 13; };"
+                      "function i() { return 14; };"
+                      "var o = { p: 7 };") {}
+
+  virtual v8::Local<v8::FunctionTemplate> GetNativeFunctionTemplate(
+      v8::Isolate* isolate, v8::Local<v8::String> name) {
+    name->Equals(isolate->GetCurrentContext(), v8::String::NewFromUtf8(isolate,
+                                "g",
+                                v8::NewStringType::kNormal).ToLocalChecked()).FromJust();
+    return v8::FunctionTemplate::New(isolate, FunctionCallback);
+  }
+
+  static void FunctionCallback(
+      const v8::FunctionCallbackInfo<v8::Value>& args) {
+    args.GetReturnValue().Set(v8::Integer::New(v8::Isolate::GetCurrent(), 10));
+  }
+};
+
+intptr_t original_external_references[] = {
+    reinterpret_cast<intptr_t>(SerializedCallback),
+    reinterpret_cast<intptr_t>(&serialized_static_field),
+    reinterpret_cast<intptr_t>(&NamedPropertyGetterForSerialization),
+    reinterpret_cast<intptr_t>(&AccessorForSerialization),
+    reinterpret_cast<intptr_t>(&SerializedExtension::FunctionCallback),
+    reinterpret_cast<intptr_t>(&serialized_static_field),
+    0};
+
+intptr_t replaced_external_references[] = {
+    reinterpret_cast<intptr_t>(SerializedCallbackReplacement),
+    reinterpret_cast<intptr_t>(&serialized_static_field),
+    reinterpret_cast<intptr_t>(&NamedPropertyGetterForSerialization),
+    reinterpret_cast<intptr_t>(&AccessorForSerialization),
+    reinterpret_cast<intptr_t>(&SerializedExtension::FunctionCallback),
+    reinterpret_cast<intptr_t>(&serialized_static_field),
+0};
+
+void ContractStateTest(const CmdLine& cmdline)
+{
+    v8::StartupData blob;
+    {
+        //Проверяем есть ли входной снимок
+        v8::SnapshotCreator creator(original_external_references);
+        v8::Isolate::CreateParams params;
+        v8::Isolate* isolate = NULL;
+        if (!cmdline.insnap.empty())
+        {
+            blob.data = cmdline.insnap.data();
+            blob.raw_size = cmdline.insnap.size();
+            params.snapshot_blob = &blob;
+            params.array_buffer_allocator = v8::ArrayBuffer::Allocator::NewDefaultAllocator();
+            params.external_references = original_external_references;
+            isolate = v8::Isolate::New(params);
+        }
+        else
+            isolate = creator.GetIsolate();
+        //Запуск isolate
+        {
+            v8::HandleScope handle_scope(isolate);
+            v8::TryCatch try_catch(isolate);
+            v8::Local<v8::Context> context = v8::Context::New(isolate);
+            v8::Context::Scope context_scope(context);
+            //v8::Local<v8::FunctionTemplate> callback = v8::FunctionTemplate::New(isolate, SerializedCallback);
+            //v8::Local<v8::Value> function = callback->GetFunction(context).ToLocalChecked();
+            if (cmdline.insnap.empty())
+                creator.SetDefaultContext(context);
+
+            v8::Local<v8::String> initsource =
+            v8::String::NewFromUtf8(isolate,
+                                    cmdline.code.c_str(),
+                                    v8::NewStringType::kNormal).ToLocalChecked();
+
+            //Компилируем контракт с кэшем его кода
+            v8::ScriptCompiler::CachedData* cache = new v8::ScriptCompiler::CachedData((const uint8_t*)cmdline.codecache.data(),
+                                                        cmdline.codecache.size(),
+                                                        v8::ScriptCompiler::CachedData::BufferNotOwned);
+
+            v8::Local<v8::Value> testresult;
+            v8::ScriptOrigin origin(v8::String::NewFromUtf8(isolate,
+                                    "test",
+                                    v8::NewStringType::kNormal).ToLocalChecked());
+            v8::ScriptCompiler::Source src(initsource, origin, cache);
+            v8::Local<v8::UnboundScript> unboundscript = v8::ScriptCompiler::CompileUnboundScript(isolate,
+                                                        &src, v8::ScriptCompiler::kConsumeCodeCache).ToLocalChecked();
+
+            v8::Local<v8::Value> result;
+            if (!unboundscript->BindToCurrentContext()->Run(context).ToLocal(&result))
+            {
+                v8::Local<v8::Value> val = try_catch.Exception();
+                if (!val->IsTrue())
+                {
+                    v8::String::Utf8Value error(isolate, try_catch.Exception());
+                    g_errorlog << "Run error(" << __FUNCTION__ << "):" << *error << std::endl;
+                    return;
+                }
+            }
+
+            //Компилируем и выполняем код из run.js
+            v8::Local<v8::String> cmdsource =
+            v8::String::NewFromUtf8(isolate,
+                                    cmdline.command.c_str(),
+                                    v8::NewStringType::kNormal).ToLocalChecked();
+            v8::Local<v8::Script> cmdscript;
+            if (!v8::Script::Compile(context, cmdsource).ToLocal(&cmdscript))
+            {
+                v8::String::Utf8Value error(isolate, try_catch.Exception());
+                g_errorlog << "Compile error(" << __FUNCTION__ << "):" << *error << std::endl;
+                return;
+            }
+
+            if (!cmdscript->Run(context).ToLocal(&result))
+            {
+                v8::Local<v8::Value> val = try_catch.Exception();
+                if (!val->IsTrue())
+                {
+                    v8::String::Utf8Value error(isolate, try_catch.Exception());
+                    g_errorlog << "Run error(" << __FUNCTION__ << "):" << *error << std::endl;
+                    return;
+                }
+            }
+        }
+        //Если все прошло удачно, то выгружаем итоговый снимок.
+        if (cmdline.insnap.empty())
+            blob = creator.CreateBlob(v8::SnapshotCreator::FunctionCodeHandling::kClear);
+        else//Использовался входной снимок
+        {
+            v8::SnapshotCreator newcreator(isolate);
+            std::ofstream snapout(cmdline.outsnap, std::ios::out | std::ios::app);
+            blob = newcreator.CreateBlob(v8::SnapshotCreator::FunctionCodeHandling::kClear);
+            snapout.write(blob.data, blob.raw_size);
+            snapout.close();
+        }
+
+    }
+}
+
 int main(int argc, char* argv[])
 {
     g_errorlog.open ("err.log", std::ofstream::out | std::ofstream::app);
@@ -599,6 +807,8 @@ int main(int argc, char* argv[])
             CreateAddressTest(cmdline.code);
         if (cmdline.mode == COMPILE_TEST)
             CompileTest(cmdline.address, cmdline.code);
+        if (cmdline.mode == STATE_TEST)
+            ContractStateTest(cmdline);
     }
     else
     {
