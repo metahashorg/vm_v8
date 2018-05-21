@@ -117,7 +117,7 @@ bool ParseCmdLine(int argc, char** argv, CmdLine& cmdline)
                 {
                     if (strcmp(argv[11], "-snap_o") == 0 && argc == 13)//Входной снимок отсутствует
                     {
-                        cmdline.outsnap = argv[14];
+                        cmdline.outsnap = argv[12];
                         result = true;
                     }
                 }
@@ -680,8 +680,6 @@ void ContractStateTest(const CmdLine& cmdline)
             v8::TryCatch try_catch(isolate);
             v8::Local<v8::Context> context = v8::Context::New(isolate);
             v8::Context::Scope context_scope(context);
-            //v8::Local<v8::FunctionTemplate> callback = v8::FunctionTemplate::New(isolate, SerializedCallback);
-            //v8::Local<v8::Value> function = callback->GetFunction(context).ToLocalChecked();
             if (cmdline.insnap.empty())
                 creator.SetDefaultContext(context);
 
@@ -738,18 +736,26 @@ void ContractStateTest(const CmdLine& cmdline)
                     return;
                 }
             }
+            else
+            {
+                v8::String::Utf8Value utf8(isolate, result);
+                g_errorlog << __FUNCTION__ << ":" << *utf8 << std::endl;
+            }
         }
         //Если все прошло удачно, то выгружаем итоговый снимок.
+        std::ofstream snapout(cmdline.outsnap.c_str(), std::ios::out | std::ios::app);
         if (cmdline.insnap.empty())
+        {
             blob = creator.CreateBlob(v8::SnapshotCreator::FunctionCodeHandling::kClear);
+            snapout.write(blob.data, blob.raw_size);
+        }
         else//Использовался входной снимок
         {
             v8::SnapshotCreator newcreator(isolate);
-            std::ofstream snapout(cmdline.outsnap, std::ios::out | std::ios::app);
             blob = newcreator.CreateBlob(v8::SnapshotCreator::FunctionCodeHandling::kClear);
             snapout.write(blob.data, blob.raw_size);
-            snapout.close();
         }
+        snapout.close();
 
     }
 }
