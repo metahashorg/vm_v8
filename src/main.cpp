@@ -106,7 +106,7 @@ bool ParseCmdLine(int argc, char** argv, CmdLine& cmdline)
                 cmdline.address = argv[4];
                 cmdline.code = ReadFile(argv[6]);
                 cmdline.codecache = ReadFile(argv[8]);
-                cmdline.command = ReadFile(argv[9]);
+                cmdline.command = ReadFile(argv[10]);
                 if (strcmp(argv[11], "-snap_i") == 0 && argc == 15)//Входной снимок представлен
                 {
                     cmdline.insnap = ReadFile(argv[12]);
@@ -682,7 +682,6 @@ void ContractStateTest(const CmdLine& cmdline)
             v8::Context::Scope context_scope(context);
             if (cmdline.insnap.empty())
                 creator.SetDefaultContext(context);
-
             v8::Local<v8::String> initsource =
             v8::String::NewFromUtf8(isolate,
                                     cmdline.code.c_str(),
@@ -751,12 +750,11 @@ void ContractStateTest(const CmdLine& cmdline)
         }
         else//Использовался входной снимок
         {
-            v8::SnapshotCreator newcreator(isolate);
+            v8::SnapshotCreator newcreator(isolate, original_external_references);
             blob = newcreator.CreateBlob(v8::SnapshotCreator::FunctionCodeHandling::kClear);
             snapout.write(blob.data, blob.raw_size);
         }
         snapout.close();
-
     }
 }
 
