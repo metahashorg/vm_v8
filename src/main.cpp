@@ -101,11 +101,11 @@ bool ParseCmdLine(int argc, char** argv, CmdLine& cmdline)
             cmdline.mode = SIGNATURE_TEST;
             result = true;
         }
-        if (strcmp(argv[2], "compile") == 0 && argc == 5)
+        if (strcmp(argv[2], "compile") == 0 && argc == 7)
         {
             cmdline.mode = COMPILE_TEST;
-            cmdline.address = argv[3];
-            cmdline.code = ReadFile(argv[4]);
+            cmdline.address = argv[4];
+            cmdline.code = ReadFile(argv[6]);
             result = true;
         }
         if (strcmp(argv[2], "run") == 0 && (argc == 13 || argc == 15))
@@ -145,14 +145,14 @@ void Usage(const char* progname)
 {
     printf(
             "Usage: %s \n"
-            "-mode bt  [js file path] - show bytecode\n"
+            "-mode bt [js file path] - show bytecode\n"
             "-mode btcount  [js file path] - instructions count\n"
             "-mode mem  [js file path] - show memory usage\n"
             "-mode external [integer] - external variable and function test\n"
             "-mode sha256 [string] - sha256 function test\n"
             "-mode sig - signature test\n"
             "-mode newaddr [pubkey(hex string)] - address test\n"
-            "-mode compile [address] [js file path] - compile test\n"
+            "-mode compile -a ADDR -js FILE.JS - compile test\n"
             "-mode run -a ADDR -js FILE.JS  -cmpl FILE.cmpl -cmd run.js -snap_i I_FILE.shot -snap_o I_FILE.shot - contract state test\n"
             ,
             progname
