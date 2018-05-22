@@ -32,8 +32,6 @@ enum Mode
     SHOW_BYTECODE,
     INS_COUNT,
     MEMORY_USAGE,
-    INIT_CONTRACT,
-    DUMP_CONTRACT,
     EXTERNAL_TEST,
     SHA256_TEST,
     SIGNATURE_TEST,
@@ -68,12 +66,6 @@ bool ParseCmdLine(int argc, char** argv, CmdLine& cmdline)
             cmdline.code = ReadFile(argv[3]);
             if (!cmdline.code.empty())
                 result = true;
-        }
-        if (mode == INIT_CONTRACT && argc == 3)
-        {
-            cmdline.mode = mode;
-            cmdline.code.clear();
-            result = true;
         }
         if ( (mode == EXTERNAL_TEST && argc == 4) ||
             (mode == SHA256_TEST && argc == 4) ||
