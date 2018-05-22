@@ -108,33 +108,48 @@ bool ParseCmdLine(int argc, char** argv, CmdLine& cmdline)
             cmdline.code = ReadFile(argv[6]);
             result = true;
         }
-        if (strcmp(argv[2], "run") == 0 && (argc == 13 || argc == 15))
+        if (strcmp(argv[2], "run") == 0)
         {
-            if (strcmp(argv[3], "-a") == 0 &&
-                strcmp(argv[5], "-js") == 0 &&
-                strcmp(argv[7], "-cmpl") == 0 &&
-                strcmp(argv[9], "-cmd") == 0)
+            if (argc == 13)//Инициализация из файла
             {
-                cmdline.mode = STATE_TEST;
-                cmdline.address = argv[4];
-                cmdline.code = ReadFile(argv[6]);
-                cmdline.codecache = ReadFile(argv[8]);
-                cmdline.command = ReadFile(argv[10]);
-                if (strcmp(argv[11], "-snap_i") == 0 && argc == 15)//Входной снимок представлен
+                if (strcmp(argv[3], "-a") == 0 &&
+                    strcmp(argv[5], "-cmd") == 0 &&
+                    strcmp(argv[7], "-js") == 0 &&
+                    strcmp(argv[9], "-cmpl") == 0 &&
+                    strcmp(argv[11], "-snap_o") == 0
+                    )
                 {
-                    cmdline.insnap = ReadFile(argv[12]);
-                    cmdline.outsnap = argv[14];
+                    cmdline.mode = STATE_TEST;
+                    cmdline.address = argv[4];
+                    cmdline.code = ReadFile(argv[8]);
+                    cmdline.codecache = ReadFile(argv[10]);
+                    cmdline.command = ReadFile(argv[6]);
+                    cmdline.outsnap = argv[12];
                     result = true;
                 }
-                else
+            }
+            else
+            {
+                if (argc == 11)//Инициализация из снимка
                 {
-                    if (strcmp(argv[11], "-snap_o") == 0 && argc == 13)//Входной снимок отсутствует
+                    if (strcmp(argv[3], "-a") == 0 &&
+                        strcmp(argv[5], "-cmd") == 0 &&
+                        strcmp(argv[7], "-snap_i") == 0 &&
+                        strcmp(argv[9], "-snap_o") == 0
+                        )
                     {
-                        cmdline.outsnap = argv[12];
+                        cmdline.mode = STATE_TEST;
+                        cmdline.address = argv[4];
+                        cmdline.command = ReadFile(argv[6]);
+                        cmdline.insnap = ReadFile(argv[8]);
+                        cmdline.outsnap = argv[10];
+                        cmdline.code.clear();
+                        cmdline.codecache.clear();
                         result = true;
                     }
                 }
             }
+
         }
 
     }
@@ -153,7 +168,8 @@ void Usage(const char* progname)
             "-mode sig - signature test\n"
             "-mode newaddr [pubkey(hex string)] - address test\n"
             "-mode compile -a ADDR -js FILE.JS - compile test\n"
-            "-mode run -a ADDR -js FILE.JS  -cmpl FILE.cmpl -cmd run.js -snap_i I_FILE.shot -snap_o I_FILE.shot - contract state test\n"
+            "-mode run -a ADDR -cmd run.js -js FILE.JS -cmpl FILE.cmpl -snap_o I_FILE.shot - contract state test(init from file)\n"
+            "-mode run -a ADDR -cmd run.js -snap_i I_FILE.shot -snap_o I_FILE.shot - contract state test(init from snapshot)\n"
             ,
             progname
         );
@@ -644,6 +660,7 @@ void ContractStateTest(const CmdLine& cmdline)
         v8::Isolate* isolate = NULL;
         if (!cmdline.insnap.empty())
         {
+            //Инициализация состояния из снимка
             blob.data = cmdline.insnap.data();
             blob.raw_size = cmdline.insnap.size();
             creator = new v8::SnapshotCreator(original_external_references, &blob);
@@ -661,33 +678,38 @@ void ContractStateTest(const CmdLine& cmdline)
             v8::Local<v8::Context> context = v8::Context::New(isolate);
             v8::Context::Scope context_scope(context);
             creator->SetDefaultContext(context);
-            v8::Local<v8::String> initsource =
-            v8::String::NewFromUtf8(isolate,
-                                    cmdline.code.c_str(),
-                                    v8::NewStringType::kNormal).ToLocalChecked();
-
-            //Компилируем контракт с кэшем его кода
-            v8::ScriptCompiler::CachedData* cache = new v8::ScriptCompiler::CachedData((const uint8_t*)cmdline.codecache.data(),
-                                                        cmdline.codecache.size(),
-                                                        v8::ScriptCompiler::CachedData::BufferNotOwned);
-
-            v8::Local<v8::Value> testresult;
-            v8::ScriptOrigin origin(v8::String::NewFromUtf8(isolate,
-                                    "test",
-                                    v8::NewStringType::kNormal).ToLocalChecked());
-            v8::ScriptCompiler::Source src(initsource, origin, cache);
-            v8::Local<v8::UnboundScript> unboundscript = v8::ScriptCompiler::CompileUnboundScript(isolate,
-                                                        &src, v8::ScriptCompiler::kConsumeCodeCache).ToLocalChecked();
-
             v8::Local<v8::Value> result;
-            if (!unboundscript->BindToCurrentContext()->Run(context).ToLocal(&result))
+
+            //Инициализация состояния из файла
+            if (!cmdline.code.empty())
             {
-                v8::Local<v8::Value> val = try_catch.Exception();
-                if (!val->IsTrue())
+                v8::Local<v8::String> initsource =
+                v8::String::NewFromUtf8(isolate,
+                                        cmdline.code.c_str(),
+                                        v8::NewStringType::kNormal).ToLocalChecked();
+
+                //Компилируем контракт с кэшем его кода
+                v8::ScriptCompiler::CachedData* cache = new v8::ScriptCompiler::CachedData((const uint8_t*)cmdline.codecache.data(),
+                                                            cmdline.codecache.size(),
+                                                            v8::ScriptCompiler::CachedData::BufferNotOwned);
+
+                v8::Local<v8::Value> testresult;
+                v8::ScriptOrigin origin(v8::String::NewFromUtf8(isolate,
+                                        "test",
+                                        v8::NewStringType::kNormal).ToLocalChecked());
+                v8::ScriptCompiler::Source src(initsource, origin, cache);
+                v8::Local<v8::UnboundScript> unboundscript = v8::ScriptCompiler::CompileUnboundScript(isolate,
+                                                            &src, v8::ScriptCompiler::kConsumeCodeCache).ToLocalChecked();
+
+                if (!unboundscript->BindToCurrentContext()->Run(context).ToLocal(&result))
                 {
-                    v8::String::Utf8Value error(isolate, try_catch.Exception());
-                    g_errorlog << "Run error(" << __FUNCTION__ << "):" << *error << std::endl;
-                    return;
+                    v8::Local<v8::Value> val = try_catch.Exception();
+                    if (!val->IsTrue())
+                    {
+                        v8::String::Utf8Value error(isolate, try_catch.Exception());
+                        g_errorlog << "Run error(" << __FUNCTION__ << "):" << *error << std::endl;
+                        return;
+                    }
                 }
             }
 
