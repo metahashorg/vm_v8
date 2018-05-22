@@ -660,17 +660,13 @@ void ContractStateTest(const CmdLine& cmdline)
     v8::StartupData blob;
     {
         //Проверяем есть ли входной снимок
-        v8::SnapshotCreator* creator = NULL;//(original_external_references);
+        v8::SnapshotCreator* creator = NULL;
         v8::Isolate::CreateParams params;
         v8::Isolate* isolate = NULL;
         if (!cmdline.insnap.empty())
         {
             blob.data = cmdline.insnap.data();
             blob.raw_size = cmdline.insnap.size();
-            /*params.snapshot_blob = &blob;
-            params.array_buffer_allocator = v8::ArrayBuffer::Allocator::NewDefaultAllocator();
-            params.external_references = original_external_references;
-            isolate = v8::Isolate::New(params);*/
             creator = new v8::SnapshotCreator(original_external_references, &blob);
             isolate = creator->GetIsolate();
         }
@@ -685,8 +681,7 @@ void ContractStateTest(const CmdLine& cmdline)
             v8::TryCatch try_catch(isolate);
             v8::Local<v8::Context> context = v8::Context::New(isolate);
             v8::Context::Scope context_scope(context);
-            //if (cmdline.insnap.empty())
-                creator->SetDefaultContext(context);
+            creator->SetDefaultContext(context);
             v8::Local<v8::String> initsource =
             v8::String::NewFromUtf8(isolate,
                                     cmdline.code.c_str(),
@@ -751,6 +746,8 @@ void ContractStateTest(const CmdLine& cmdline)
         blob = creator->CreateBlob(v8::SnapshotCreator::FunctionCodeHandling::kClear);
         snapout.write(blob.data, blob.raw_size);
         snapout.close();
+        if (creator)
+            delete creator;
     }
 }
 
