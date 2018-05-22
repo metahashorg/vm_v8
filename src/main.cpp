@@ -56,38 +56,59 @@ bool ParseCmdLine(int argc, char** argv, CmdLine& cmdline)
     bool result = false;
     if (argc >= 3 && strcmp(argv[1], "-mode") == 0)
     {
-        Mode mode = (Mode)atoi(argv[2]);
-        if ( (mode == SHOW_BYTECODE && argc == 4) ||
-             (mode == INS_COUNT && argc == 4) ||
-             (mode == MEMORY_USAGE && argc == 4)
-            )
+        if (strcmp(argv[2], "bt") == 0 && argc == 4)
         {
-            cmdline.mode = mode;
+            cmdline.mode = SHOW_BYTECODE;
             cmdline.code = ReadFile(argv[3]);
             if (!cmdline.code.empty())
                 result = true;
         }
-        if ( (mode == EXTERNAL_TEST && argc == 4) ||
-            (mode == SHA256_TEST && argc == 4) ||
-            (mode == ADDRESS_TEST && argc == 4) )
+        if (strcmp(argv[2], "btcount") == 0 && argc == 4)
         {
-            cmdline.mode = mode;
+            cmdline.mode = INS_COUNT;
+            cmdline.code = ReadFile(argv[3]);
+            if (!cmdline.code.empty())
+                result = true;
+        }
+        if (strcmp(argv[2], "mem") == 0 && argc == 4)
+        {
+            cmdline.mode = MEMORY_USAGE;
+            cmdline.code = ReadFile(argv[3]);
+            if (!cmdline.code.empty())
+                result = true;
+        }
+        if (strcmp(argv[2], "external") == 0 && argc == 4)
+        {
+            cmdline.mode = EXTERNAL_TEST;
             cmdline.code = argv[3];
             result = true;
         }
-        if (mode == SIGNATURE_TEST && argc == 3)
+
+        if (strcmp(argv[2], "sha256") == 0 && argc == 4)
         {
-            cmdline.mode = mode;
+            cmdline.mode = SHA256_TEST;
+            cmdline.code = argv[3];
             result = true;
         }
-        if (mode == COMPILE_TEST && argc == 5)
+        if (strcmp(argv[2], "newaddr") == 0 && argc == 4)
         {
-            cmdline.mode = mode;
+            cmdline.mode = ADDRESS_TEST;
+            cmdline.code = argv[3];
+            result = true;
+        }
+        if (strcmp(argv[2], "sig") == 0 && argc == 3)
+        {
+            cmdline.mode = SIGNATURE_TEST;
+            result = true;
+        }
+        if (strcmp(argv[2], "compile") == 0 && argc == 5)
+        {
+            cmdline.mode = COMPILE_TEST;
             cmdline.address = argv[3];
             cmdline.code = ReadFile(argv[4]);
             result = true;
         }
-        if (mode == STATE_TEST && (argc == 13 || argc == 15))
+        if (strcmp(argv[2], "run") == 0 && (argc == 13 || argc == 15))
         {
             if (strcmp(argv[3], "-a") == 0 &&
                 strcmp(argv[5], "-js") == 0 &&
@@ -124,16 +145,15 @@ void Usage(const char* progname)
 {
     printf(
             "Usage: %s \n"
-            "-mode 0  [js file path] - show bytecode\n"
-            "-mode 1  [js file path] - instructions count\n"
-            "-mode 2  [js file path] - show memory usage\n"
-            "3 - initialization of the contract status in the stack (Not ready yet)\n"
-            "4 - read the status of a contract from the stack (Not ready yet)\n"
-            "-mode 5  [integer] - external variable and function test\n"
-            "-mode 6  [string] - sha256 function test\n"
-            "-mode 7 - signature test\n"
-            "-mode 8 [pubkey(hex string)] - address test\n"
-            "-mode 9 [address] [js file path] - compile test\n"
+            "-mode bt  [js file path] - show bytecode\n"
+            "-mode btcount  [js file path] - instructions count\n"
+            "-mode mem  [js file path] - show memory usage\n"
+            "-mode external [integer] - external variable and function test\n"
+            "-mode sha256 [string] - sha256 function test\n"
+            "-mode sig - signature test\n"
+            "-mode newaddr [pubkey(hex string)] - address test\n"
+            "-mode compile [address] [js file path] - compile test\n"
+            "-mode run -a ADDR -js FILE.JS  -cmpl FILE.cmpl -cmd run.js -snap_i I_FILE.shot -snap_o I_FILE.shot - contract state test\n"
             ,
             progname
         );
