@@ -577,10 +577,6 @@ static void SerializedCallback(const v8::FunctionCallbackInfo<v8::Value>& args)
 {
 }
 
-static void SerializedCallbackReplacement(const v8::FunctionCallbackInfo<v8::Value>& args)
-{
-}
-
 static void NamedPropertyGetterForSerialization(v8::Local<v8::Name> name,
                                                 const v8::PropertyCallbackInfo<v8::Value>& info)
 {
@@ -705,7 +701,11 @@ void ContractStateTest(const CmdLine& cmdline)
             }
         }
         //Если все прошло удачно, то выгружаем итоговый снимок.
+        const char* flags = "--expose_gc";
+        v8::V8::SetFlagsFromString(flags, strlen(flags));
         std::ofstream snapout(cmdline.outsnap.c_str(), std::ios::out | std::ios::app);
+        //Запрашиваем сборку мусора перед созданием снимка
+        isolate->RequestGarbageCollectionForTesting(v8::Isolate::kFullGarbageCollection);
         blob = creator->CreateBlob(v8::SnapshotCreator::FunctionCodeHandling::kClear);
         snapout.write(blob.data, blob.raw_size);
         snapout.close();
