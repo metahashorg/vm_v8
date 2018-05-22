@@ -56,44 +56,44 @@ bool ParseCmdLine(int argc, char** argv, CmdLine& cmdline)
     bool result = false;
     if (argc >= 3 && strcmp(argv[1], "-mode") == 0)
     {
-        if (strcmp(argv[2], "bt") == 0 && argc == 4)
+        if (strcmp(argv[2], "bt") == 0 && argc == 5)
         {
             cmdline.mode = SHOW_BYTECODE;
-            cmdline.code = ReadFile(argv[3]);
+            cmdline.code = ReadFile(argv[4]);
             if (!cmdline.code.empty())
                 result = true;
         }
-        if (strcmp(argv[2], "btcount") == 0 && argc == 4)
+        if (strcmp(argv[2], "btcount") == 0 && argc == 5)
         {
             cmdline.mode = INS_COUNT;
-            cmdline.code = ReadFile(argv[3]);
+            cmdline.code = ReadFile(argv[4]);
             if (!cmdline.code.empty())
                 result = true;
         }
-        if (strcmp(argv[2], "mem") == 0 && argc == 4)
+        if (strcmp(argv[2], "mem") == 0 && argc == 5)
         {
             cmdline.mode = MEMORY_USAGE;
-            cmdline.code = ReadFile(argv[3]);
+            cmdline.code = ReadFile(argv[4]);
             if (!cmdline.code.empty())
                 result = true;
         }
-        if (strcmp(argv[2], "external") == 0 && argc == 4)
+        if (strcmp(argv[2], "external") == 0 && argc == 5)
         {
             cmdline.mode = EXTERNAL_TEST;
-            cmdline.code = argv[3];
+            cmdline.code = argv[4];
             result = true;
         }
 
-        if (strcmp(argv[2], "sha256") == 0 && argc == 4)
+        if (strcmp(argv[2], "sha256") == 0 && argc == 5)
         {
             cmdline.mode = SHA256_TEST;
-            cmdline.code = argv[3];
+            cmdline.code = argv[4];
             result = true;
         }
-        if (strcmp(argv[2], "newaddr") == 0 && argc == 4)
+        if (strcmp(argv[2], "newaddr") == 0 && argc == 5)
         {
             cmdline.mode = ADDRESS_TEST;
-            cmdline.code = argv[3];
+            cmdline.code = argv[4];
             result = true;
         }
         if (strcmp(argv[2], "sig") == 0 && argc == 3)
@@ -160,13 +160,13 @@ void Usage(const char* progname)
 {
     printf(
             "Usage: %s \n"
-            "-mode bt [js file path] - show bytecode\n"
-            "-mode btcount  [js file path] - instructions count\n"
-            "-mode mem  [js file path] - show memory usage\n"
-            "-mode external [integer] - external variable and function test\n"
-            "-mode sha256 [string] - sha256 function test\n"
+            "-mode bt -js [js file path] - show bytecode\n"
+            "-mode btcount -js [js file path] - instructions count\n"
+            "-mode mem -js [js file path] - show memory usage\n"
+            "-mode external -intarg [integer] - external variable and function test\n"
+            "-mode sha256 -strarg [string] - sha256 function test\n"
             "-mode sig - signature test\n"
-            "-mode newaddr [pubkey(hex string)] - address test\n"
+            "-mode newaddr -strarg [pubkey(hex string)] - address test\n"
             "-mode compile -a ADDR -js FILE.JS - compile test\n"
             "-mode run -a ADDR -cmd run.js -js FILE.JS -cmpl FILE.cmpl -snap_o I_FILE.shot - contract state test(init from file)\n"
             "-mode run -a ADDR -cmd run.js -snap_i I_FILE.shot -snap_o I_FILE.shot - contract state test(init from snapshot)\n"

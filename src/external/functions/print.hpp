@@ -21,14 +21,14 @@ void print(const v8::FunctionCallbackInfo<v8::Value>& args)
     if(arg->IsUint32())
     {
         int val = arg->ToUint32(isolate->GetCurrentContext()).ToLocalChecked()->Value();
-        g_errorlog << __FUNCTION__ << val << std::endl;
+        g_errorlog << __FUNCTION__ << ":" << val << std::endl;
     }
     else
     {
         if (arg->IsString())
         {
             v8::String::Utf8Value param1(arg->ToString());
-            g_errorlog << __FUNCTION__ << *param1 << std::endl;
+            g_errorlog << __FUNCTION__ << ":" << *param1 << std::endl;
         }
         else
             g_errorlog << "Invalid argument type(" << __FUNCTION__ << ")" << std::endl;
