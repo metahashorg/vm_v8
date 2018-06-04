@@ -210,8 +210,9 @@ void V8Service::Compile(const std::string& address, const std::string& code)
         {
             //Cохраняем компилированный скрипт в ADDR.cmpl
             cmplfile << cmpl;
-            //Сохраняем файл снимка
-            snapshotfile.write((const char*)snapshot.data(), snapshot.size());
+            //Сохраняем файл снимка если он создан
+            if (!snapshot.empty())
+                snapshotfile.write((const char*)snapshot.data(), snapshot.size());
         }
     }
     dbgfile.close();
@@ -222,82 +223,87 @@ void V8Service::Compile(const std::string& address, const std::string& code)
 }
 
 std::string V8Service::GetBytecode(const char* jscode, std::string& cmpl,
-                                    std::vector<uint8_t> snapshot, std::ofstream& errlog)
+                                    std::vector<uint8_t>& snapshot, std::ofstream& errlog)
 {
     StdCapture out;
     out.BeginCapture();
     std::string bytecode = "";
     cmpl.clear();
-    //Установка флага вывода байткода
-    v8::StartupData blob;
-    v8::SnapshotCreator creator(original_external_references);
     v8::V8::SetFlagsFromString("--trace-ignition", 16);
-    v8::Isolate* isolate = creator.GetIsolate();
+    v8::StartupData blob;
     {
-        v8::Isolate::Scope isolate_scope(isolate);
-        v8::HandleScope handle_scope(isolate);
-        v8::TryCatch try_catch(isolate);
-        v8::Local<v8::Context> context = v8::Context::New(isolate);
-        v8::Context::Scope context_scope(context);
+        v8::SnapshotCreator* creator = NULL;
+        v8::Isolate::CreateParams params;
+        v8::Isolate* isolate = NULL;
+        creator = new v8::SnapshotCreator(original_external_references);
+        isolate = creator->GetIsolate();
 
-        v8::Local<v8::String> source =
-        v8::String::NewFromUtf8(isolate,
-                                jscode,
-                                v8::NewStringType::kNormal).ToLocalChecked();
-
-        v8::Local<v8::Script> script;
-        if (!v8::Script::Compile(context, source).ToLocal(&script))
+        //Запуск isolate
         {
-            v8::String::Utf8Value error(isolate, try_catch.Exception());
-            errlog << "Compile error(" << __FUNCTION__ << "):" << *error << std::endl;
-            return "";
-        }
+            v8::HandleScope handle_scope(isolate);
+            v8::TryCatch try_catch(isolate);
+            v8::Local<v8::Context> context = v8::Context::New(isolate);
+            v8::Context::Scope context_scope(context);
+            creator->SetDefaultContext(context);
+            v8::Local<v8::Value> result;
 
-        v8::Local<v8::Value> result;
-        if (!script->Run(context).ToLocal(&result))
-        {
-            v8::Local<v8::Value> val = try_catch.Exception();
-            if (!val->IsTrue())
+            v8::Local<v8::String> source =
+            v8::String::NewFromUtf8(isolate,
+                                    jscode,
+                                    v8::NewStringType::kNormal).ToLocalChecked();
+            v8::Local<v8::Script> script;
+            if (!v8::Script::Compile(context, source).ToLocal(&script))
             {
                 v8::String::Utf8Value error(isolate, try_catch.Exception());
-                errlog << "Run error(" << __FUNCTION__ << "):" << *error << std::endl;
+                errlog << "Compile error(" << __FUNCTION__ << "):" << *error << std::endl;
                 return "";
             }
-        }
 
-        //Если выполнение удачно, то сохраняем копию компилированного кода
-        v8::Local<v8::Value> testresult;
-        v8::ScriptOrigin origin(v8::String::NewFromUtf8(isolate,
-                                "test",
-                                v8::NewStringType::kNormal).ToLocalChecked());
-        v8::ScriptCompiler::Source src(source, origin);
-        v8::Local<v8::UnboundScript> unboundscript = v8::ScriptCompiler::CompileUnboundScript(isolate, &src, v8::ScriptCompiler::kProduceFullCodeCache).ToLocalChecked();
-        v8::ScriptCompiler::CachedData* data = v8::ScriptCompiler::CreateCodeCache(unboundscript);
-        if (data && data->length)
-            cmpl.assign((const char*)data->data, data->length);
-        else
-        {
-            errlog << "(" << __FUNCTION__ << "):Can not create code cache" << std::endl;
+            if (!script->Run(context).ToLocal(&result))
+            {
+                v8::Local<v8::Value> val = try_catch.Exception();
+                if (!val->IsTrue())
+                {
+                    v8::String::Utf8Value error(isolate, try_catch.Exception());
+                    errlog << "Run error(" << __FUNCTION__ << "):" << *error << std::endl;
+                    return "";
+                }
+            }
+            else
+            {
+                v8::String::Utf8Value utf8(isolate, result);
+                errlog << __FUNCTION__ << ":" << *utf8 << std::endl;
+            }
+            //Сохраняем копию компилированного кода
+            v8::Local<v8::Value> testresult;
+            v8::ScriptOrigin origin(v8::String::NewFromUtf8(isolate,
+                                    "test",
+                                    v8::NewStringType::kNormal).ToLocalChecked());
+            v8::ScriptCompiler::Source src(source, origin);
+            v8::Local<v8::UnboundScript> unboundscript = v8::ScriptCompiler::CompileUnboundScript(isolate, &src, v8::ScriptCompiler::kProduceFullCodeCache).ToLocalChecked();
+            v8::ScriptCompiler::CachedData* data = v8::ScriptCompiler::CreateCodeCache(unboundscript);
+            if (data && data->length)
+                cmpl.assign((const char*)data->data, data->length);
+            else
+            {
+                errlog << "(" << __FUNCTION__ << "):Can not create code cache" << std::endl;
+            }
         }
-
-        v8::String::Utf8Value utf8(isolate, result);
+        //Получаем байткод
         out.EndCapture();
         bytecode = out.GetCapture();
-
-        //И создаем снимок памяти машины
+        //Если все прошло удачно, то выгружаем итоговый снимок.
         const char* flags = "--expose_gc";
-        v8::V8::SetFlagsFromString(flags, 11);
+        v8::V8::SetFlagsFromString(flags, strlen(flags));
         //Запрашиваем сборку мусора перед созданием снимка
         isolate->RequestGarbageCollectionForTesting(v8::Isolate::kFullGarbageCollection);
-        blob = creator.CreateBlob(v8::SnapshotCreator::FunctionCodeHandling::kClear);
-        snapshot.clear();
+        blob = creator->CreateBlob(v8::SnapshotCreator::FunctionCodeHandling::kClear);
         snapshot.resize(blob.raw_size);
         memcpy(snapshot.data(), blob.data, blob.raw_size);
-    }
 
-    isolate->Dispose();
-    v8::V8::Dispose();
-    v8::V8::ShutdownPlatform();
+        if (creator)
+            delete creator;
+    }
     return bytecode;
 }
 
