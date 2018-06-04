@@ -318,6 +318,7 @@ std::string V8Service::GetBytecode(const char* jscode, std::string& cmpl,
         if (creator)
             delete creator;
     }
+
     return bytecode;
 }
 
@@ -326,14 +327,8 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
     std::string execresult = "";
     std::string snapshot = "";
     std::unordered_map<std::string, std::vector<std::string> >::iterator it;
-    if (!se->snapshotsnames.empty())
-        it = se->snapshotsnames.find(address);
-
-    if (it == se->snapshotsnames.end() || se->snapshotsnames.empty())
-    {
-        se->Reload((compileDirectory + "/").c_str());
-        it = se->snapshotsnames.find(address);
-    }
+    se->Reload((compileDirectory + "/").c_str());
+    it = se->snapshotsnames.find(address);
 
     v8::StartupData blob;
     //Проверяем есть ли входной снимок
