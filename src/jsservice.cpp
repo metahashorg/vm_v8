@@ -138,8 +138,8 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
 {
     std::string address = "";
     std::string js = "";
-    std::string resp = "";
     //Получаем режим запроса из url
+    mhd_resp.headers["Content-Type"] = "application/javascript";
     std::string action = mhd_req.params["act"];
     if (!action.empty())
     {
@@ -193,8 +193,6 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
         log_err("Command not specified.\n");
         mhd_resp.code = HTTP_BAD_REQUEST_CODE;
     }
-
-	mhd_resp.data = resp;
 }
 
 void V8Service::Compile(const std::string& address, const std::string& code)
@@ -345,12 +343,17 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
     if (it != se->snapshotsnames.end())
     {
         //Инициализация состояния из снимка
+        printf("run from snapshot\n");
         std::string fullsnappath = compileDirectory + "/" + it->second[it->second.size()-1];
         snapshot = ReadFile(fullsnappath);
-        blob.data = snapshot.data();
-        blob.raw_size = snapshot.size();
-        creator = new v8::SnapshotCreator(original_external_references, &blob);
-        isolate = creator->GetIsolate();
+        if (!snapshot.empty())
+        {
+            printf("snapshot size = %ld\n", snapshot.size());
+            blob.data = snapshot.data();
+            blob.raw_size = snapshot.size();
+            creator = new v8::SnapshotCreator(original_external_references, &blob);
+            isolate = creator->GetIsolate();
+        }
     }
     else
     {
