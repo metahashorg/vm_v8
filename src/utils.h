@@ -40,7 +40,6 @@ public:
     SnapshotEnumerator(const char* directory){Reload(directory);};
     void Reload(const char* directory);
     void FindNewestSnapshots();
-    void PrintFiles();
     std::unordered_map<std::string, std::vector<std::string> > snapshotsnames;
 };
 

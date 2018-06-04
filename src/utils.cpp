@@ -285,16 +285,3 @@ void SnapshotEnumerator::FindNewestSnapshots()
         it->second[maxnumidx] = lm;
     }
 }
-
-void SnapshotEnumerator::PrintFiles()
-{
-    for (auto it = snapshotsnames.begin(); it != snapshotsnames.end(); ++it)
-    {
-        printf("----------------------------\n");
-        printf("Address: %s\n", it->first.c_str());
-        printf("Snapshots: \n");
-        for (size_t i = 0; i < it->second.size(); ++i)
-            printf("%s\n", it->second[i].c_str());
-        printf("----------------------------\n");
-    }
-}
