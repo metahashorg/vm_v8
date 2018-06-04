@@ -28,7 +28,7 @@ private:
     void ProcessRequest(Request& mhd_req, Response& mhd_resp);
     bool CheckCompileDirectory();
     void Compile(const std::string& address, const std::string& code);
-    void Run(const std::string& address, const std::string& code);
+    std::string Run(const std::string& address, const std::string& code);
     std::string GetBytecode(const char* jscode, std::string& cmpl,
                             std::vector<uint8_t>& snapshot, std::ofstream& errlog);
     std::vector<LocalStore*> local_store;

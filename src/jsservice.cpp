@@ -149,7 +149,10 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
             address = mhd_req.params["a"];
             js = mhd_req.post;
             if (!address.empty() && !js.empty())
+            {
                 Compile(address, js);
+                mhd_resp.code = HTTP_OK_CODE;
+            }
             else
             {
                 log_err("One of the parameters for the compilation command is not specified.\n");
@@ -161,10 +164,15 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
             //Режим выполнения кода
             if (action.compare("cmdrun") == 0)
             {
+                std::string response = "";
                 address = mhd_req.params["a"];
                 js = mhd_req.post;
                 if (!address.empty() && !js.empty())
-                    Run(address, js);
+                {
+                    response = Run(address, js);
+                    mhd_resp.data = response;
+                    mhd_resp.code = HTTP_OK_CODE;
+                }
                 else
                 {
                     log_err("One of the parameters for the run command is not specified.\n");
@@ -315,8 +323,9 @@ std::string V8Service::GetBytecode(const char* jscode, std::string& cmpl,
     return bytecode;
 }
 
-void V8Service::Run(const std::string& address, const std::string& code)
+std::string V8Service::Run(const std::string& address, const std::string& code)
 {
+    std::string execresult = "";
     std::string snapshot = "";
     std::unordered_map<std::string, std::vector<std::string> >::iterator it;
     if (!se->snapshotsnames.empty())
@@ -367,7 +376,7 @@ void V8Service::Run(const std::string& address, const std::string& code)
         {
             v8::String::Utf8Value error(isolate, try_catch.Exception());
             g_errorlog << "Compile error(" << __FUNCTION__ << "):" << *error << std::endl;
-            return;
+            return "";
         }
 
         if (!script->Run(context).ToLocal(&result))
@@ -377,13 +386,13 @@ void V8Service::Run(const std::string& address, const std::string& code)
             {
                 v8::String::Utf8Value error(isolate, try_catch.Exception());
                 g_errorlog << "Run error(" << __FUNCTION__ << "):" << *error << std::endl;
-                return;
+                return "";
             }
         }
         else
         {
             v8::String::Utf8Value utf8(isolate, result);
-            g_errorlog << __FUNCTION__ << ":" << *utf8 << std::endl;
+            execresult = *utf8;
         }
     }
 
@@ -400,6 +409,7 @@ void V8Service::Run(const std::string& address, const std::string& code)
     snapout.close();
     if (creator)
         delete creator;
+    return execresult;
 }
 
 void RunV8Service(const char* configpath)
