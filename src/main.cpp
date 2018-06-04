@@ -231,7 +231,6 @@ intptr_t original_external_references[] =
 std::string GetBytecode(const char* jscode, std::string& cmpl)
 {
     StdCapture out;
-    //out.BeginCapture();
     std::string bytecode = "";
     cmpl.clear();
     //Установка флага вывода байткода
