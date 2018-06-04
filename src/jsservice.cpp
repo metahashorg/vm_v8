@@ -343,12 +343,10 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
     if (it != se->snapshotsnames.end())
     {
         //Инициализация состояния из снимка
-        printf("run from snapshot\n");
         std::string fullsnappath = compileDirectory + "/" + it->second[it->second.size()-1];
         snapshot = ReadFile(fullsnappath);
         if (!snapshot.empty())
         {
-            printf("snapshot size = %ld\n", snapshot.size());
             blob.data = snapshot.data();
             blob.raw_size = snapshot.size();
             creator = new v8::SnapshotCreator(original_external_references, &blob);
