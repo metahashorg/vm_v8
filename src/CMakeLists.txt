@@ -14,6 +14,7 @@ set(PROJECT_HEADERS
 	external/variables/value.hpp
 	external/functions/meta_MHC_addr_from_pub_key.hpp
 	utils.h
+	jsservice.h
     )
 
 
@@ -24,6 +25,7 @@ set(PROJECT_SOURCES
 set(PROJECT_MAIN
     utils.cpp
     stdcapture.hpp
+    jsservice.cpp
     main.cpp
     )
 	
@@ -50,6 +52,10 @@ set(PROJECT_LIBS
     -lc++
 	-ldl
 	-lz
+    libsniper_mhd.a
+    libmicrohttpd.a
+    uriparser.a
+    config++.a
     )
 
 

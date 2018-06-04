@@ -23,6 +23,8 @@
 #include "external/functions/meta_MHC_check_sign.hpp"
 #include "external/functions/meta_MHC_addr_from_pub_key.hpp"
 
+#include "jsservice.h"
+
 //Лог програмных ошибок и ошибок js
 std::ofstream g_errorlog;
 
@@ -37,7 +39,8 @@ enum Mode
     SIGNATURE_TEST,
     ADDRESS_TEST,
     COMPILE_TEST,
-    STATE_TEST
+    STATE_TEST,
+    SERVICE_RUN
 };
 
 struct CmdLine
@@ -49,6 +52,7 @@ struct CmdLine
 	std::string command;
 	std::string insnap;
 	std::string outsnap;
+	std::string config;
 };
 
 bool ParseCmdLine(int argc, char** argv, CmdLine& cmdline)
@@ -151,6 +155,12 @@ bool ParseCmdLine(int argc, char** argv, CmdLine& cmdline)
             }
 
         }
+        if (strcmp(argv[2], "service") == 0 && argc == 4)
+        {
+            cmdline.mode = SERVICE_RUN;
+            cmdline.config = argv[3];
+            result = true;
+        }
 
     }
     return result;
@@ -170,6 +180,7 @@ void Usage(const char* progname)
             "-mode compile -a ADDR -js FILE.JS - compile test\n"
             "-mode run -a ADDR -cmd run.js -js FILE.JS -cmpl FILE.cmpl -snap_o I_FILE.shot - contract state test(init from file)\n"
             "-mode run -a ADDR -cmd run.js -snap_i I_FILE.shot -snap_o I_FILE.shot - contract state test(init from snapshot)\n"
+            "-mode service [config file path] - run program in service mode\n"
             ,
             progname
         );
@@ -811,6 +822,8 @@ int main(int argc, char* argv[])
             CompileTest(cmdline.address, cmdline.code);
         if (cmdline.mode == STATE_TEST)
             ContractStateTest(cmdline);
+        if (cmdline.mode == SERVICE_RUN)
+            RunV8Service(cmdline.config.c_str());
     }
     else
     {

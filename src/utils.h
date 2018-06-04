@@ -34,4 +34,14 @@ std::string BytecodeToListing(const std::string& bytecode);
 void ParseBytecode(const std::string& bytecode, std::unordered_map<std::string, size_t>& instructions);
 std::string RemoveColorCharacters(const std::string& text);
 
+class SnapshotEnumerator
+{
+public:
+    SnapshotEnumerator(const char* directory){Reload(directory);};
+    void Reload(const char* directory);
+    void FindNewestSnapshots();
+    void PrintFiles();
+    std::unordered_map<std::string, std::vector<std::string> > snapshotsnames;
+};
+
 #endif

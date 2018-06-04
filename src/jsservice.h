@@ -2,6 +2,8 @@
 #include <include/libplatform/libplatform.h>
 #include <include/v8.h>
 
+#include "utils.h"
+
 #ifndef V8_SERVICE
 #define V8_SERVICE
 
@@ -31,6 +33,7 @@ private:
                             std::vector<uint8_t>& snapshot, std::ofstream& errlog);
     std::vector<LocalStore*> local_store;
     std::string compileDirectory;
+    SnapshotEnumerator* se;
 };
 
 void RunV8Service(const char* configpath);

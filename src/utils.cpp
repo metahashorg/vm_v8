@@ -4,6 +4,7 @@
 #include <regex>
 #include <openssl/ripemd.h>
 #include <re2/re2.h>
+#include <dirent.h>
 
 std::string DumpToHexString(const uint8_t* dump, uint32_t dumpsize)
 {
@@ -205,4 +206,95 @@ std::string BytecodeToListing(const std::string& bytecode)
         i = text.find('@', j);
     }
     return listing;
+}
+
+void SnapshotEnumerator::Reload(const char* directory)
+{
+    DIR *dir;
+    struct dirent *ent;
+    if (!snapshotsnames.empty())
+        snapshotsnames.clear();
+    if ((dir = opendir (directory)) != NULL)
+    {
+        while ((ent = readdir(dir)) != NULL)
+        {
+            std::string filename = ent->d_name;
+            size_t i = filename.rfind('.', filename.size());
+            if (i != std::string::npos)
+            {
+                std::string ext = filename.substr(i, filename.size()-i);
+                if (ext.compare(".shot") == 0)
+                {
+                    i = filename.find('.');
+                    std::string addr = filename.substr(0, i);
+                    auto it = snapshotsnames.find(addr);
+                    if (it != snapshotsnames.end())
+                        it->second.push_back(filename);
+                    else
+                    {
+                        std::vector<std::string> fn;
+                        fn.push_back(filename);
+                        snapshotsnames[addr] = fn;
+                    }
+                }
+            }
+        }
+        closedir(dir);
+    }
+    FindNewestSnapshots();
+}
+
+void SnapshotEnumerator::FindNewestSnapshots()
+{
+    size_t j, k;
+    std::string snum = "";
+    for (auto it = snapshotsnames.begin(); it != snapshotsnames.end(); ++it)
+    {
+        int maxnum = 0;
+        size_t maxnumidx = 0;
+        if (it->second.size() > 1)
+        {
+            for (size_t i = 0; i < it->second.size(); ++i)
+            {
+                j = it->second[i].find('.', 0);
+                if (j != std::string::npos)
+                {
+                    k = it->second[i].find('.', j+1);
+                    if (k != std::string::npos)
+                    {
+                        snum = it->second[i].substr(j+1, k-j-1);
+                        try
+                        {
+                            int curnum = std::stoi(snum);
+                            if (curnum > maxnum)
+                            {
+                                maxnum = curnum;
+                                maxnumidx = i;
+                            }
+                        }
+                        catch(const std::exception& ex)
+                        {
+                        }
+                    }
+                }
+            }
+        }
+        //Устанавливаем максимальный элемент последним в массиве
+        std::string lm = it->second[it->second.size()-1];
+        it->second[it->second.size()-1] = it->second[maxnumidx];
+        it->second[maxnumidx] = lm;
+    }
+}
+
+void SnapshotEnumerator::PrintFiles()
+{
+    for (auto it = snapshotsnames.begin(); it != snapshotsnames.end(); ++it)
+    {
+        printf("----------------------------\n");
+        printf("Address: %s\n", it->first.c_str());
+        printf("Snapshots: \n");
+        for (size_t i = 0; i < it->second.size(); ++i)
+            printf("%s\n", it->second[i].c_str());
+        printf("----------------------------\n");
+    }
 }
