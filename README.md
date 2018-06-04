@@ -28,7 +28,6 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:src/v8/lib
 ```shell
 ./vm_v8 -mode bt -js [js file path]
 ```
-> Program redirects the output of ignition compiler to the console.
 
 2. Counting the number of instructions: 
 ```shell
@@ -64,7 +63,6 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:src/v8/lib
 ```shell
  ./vm_v8 -mode compile -a ADDR -js FILE.JS
  ```
-> There is no input data. Values are checked by default.
 
 9. Initialization status: 
 ```shell
@@ -89,6 +87,7 @@ export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:src/v8/lib
 `I_FILE.shot` - input file of the virtual machine memory snapshot, it is mandatory for the status test and optional for the initialization test.
 
 `I_FILE.shot` — file containing memory snapshot after core code and command code
+
 
 Following files are added to the project:
 ```shell
