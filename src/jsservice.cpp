@@ -287,8 +287,8 @@ std::string V8Service::GetBytecode(const char* jscode, std::string& cmpl,
             }
             else
             {
-                v8::String::Utf8Value utf8(isolate, result);
-                errlog << __FUNCTION__ << ":" << *utf8 << std::endl;
+                //v8::String::Utf8Value utf8(isolate, result);
+                //errlog << __FUNCTION__ << ":" << *utf8 << std::endl;
             }
             //Сохраняем копию компилированного кода
             v8::Local<v8::Value> testresult;
