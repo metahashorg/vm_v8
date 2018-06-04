@@ -18,7 +18,7 @@ public:
     virtual ~V8Service();
 	virtual bool init();
     virtual bool run(int thread_number, Request& mhd_req, Response& mhd_resp);
-
+    void Compile(const std::string& address, const std::string& code);
 private:
     struct LocalStore
 	{
@@ -27,7 +27,7 @@ private:
     bool ReadConfig();
     void ProcessRequest(Request& mhd_req, Response& mhd_resp);
     bool CheckCompileDirectory();
-    void Compile(const std::string& address, const std::string& code);
+    //void Compile(const std::string& address, const std::string& code);
     std::string Run(const std::string& address, const std::string& code);
     std::string GetBytecode(const char* jscode, std::string& cmpl,
                             std::vector<uint8_t>& snapshot, std::ofstream& errlog);

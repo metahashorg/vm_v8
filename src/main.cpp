@@ -186,17 +186,60 @@ void Usage(const char* progname)
         );
 }
 
+//Вспомогательные функции теста состояния
+static void SerializedCallback(const v8::FunctionCallbackInfo<v8::Value>& args)
+{
+}
+
+static void NamedPropertyGetterForSerialization(v8::Local<v8::Name> name,
+                                                const v8::PropertyCallbackInfo<v8::Value>& info)
+{
+}
+
+static void AccessorForSerialization(v8::Local<v8::String> property,
+                                     const v8::PropertyCallbackInfo<v8::Value>& info)
+{
+}
+
+static int serialized_static_field = 314;
+
+class SerializedExtension : public v8::Extension
+{
+ public:
+    SerializedExtension() : v8::Extension("serialized extension") {}
+
+    virtual v8::Local<v8::FunctionTemplate> GetNativeFunctionTemplate(v8::Isolate* isolate, v8::Local<v8::String> name)
+    {
+        return v8::FunctionTemplate::New(isolate, FunctionCallback);
+    }
+    static void FunctionCallback(const v8::FunctionCallbackInfo<v8::Value>& args)
+    {
+    }
+};
+
+intptr_t original_external_references[] =
+{
+    reinterpret_cast<intptr_t>(SerializedCallback),
+    reinterpret_cast<intptr_t>(&serialized_static_field),
+    reinterpret_cast<intptr_t>(&NamedPropertyGetterForSerialization),
+    reinterpret_cast<intptr_t>(&AccessorForSerialization),
+    reinterpret_cast<intptr_t>(&SerializedExtension::FunctionCallback),
+    reinterpret_cast<intptr_t>(&serialized_static_field),
+    0
+};
+
 std::string GetBytecode(const char* jscode, std::string& cmpl)
 {
     StdCapture out;
-    out.BeginCapture();
+    //out.BeginCapture();
     std::string bytecode = "";
     cmpl.clear();
     //Установка флага вывода байткода
     v8::V8::SetFlagsFromString("--trace-ignition", 16);
-    v8::Isolate::CreateParams create_params;
-    create_params.array_buffer_allocator = v8::ArrayBuffer::Allocator::NewDefaultAllocator();
-    v8::Isolate* isolate = v8::Isolate::New(create_params);
+    v8::SnapshotCreator* creator = NULL;
+    v8::Isolate* isolate = NULL;
+    creator = new v8::SnapshotCreator(original_external_references);
+    isolate = creator->GetIsolate();
     {
         v8::Isolate::Scope isolate_scope(isolate);
         v8::HandleScope handle_scope(isolate);
@@ -208,7 +251,7 @@ std::string GetBytecode(const char* jscode, std::string& cmpl)
         v8::String::NewFromUtf8(isolate,
                                 jscode,
                                 v8::NewStringType::kNormal).ToLocalChecked();
-
+        out.BeginCapture();
         v8::Local<v8::Script> script;
         if (!v8::Script::Compile(context, source).ToLocal(&script))
         {
@@ -228,7 +271,7 @@ std::string GetBytecode(const char* jscode, std::string& cmpl)
                 return "";
             }
         }
-
+        out.EndCapture();
         //Если выполнение удачно, то сохраняем копию компилированного кода
         v8::Local<v8::Value> testresult;
         v8::ScriptOrigin origin(v8::String::NewFromUtf8(isolate,
@@ -245,14 +288,9 @@ std::string GetBytecode(const char* jscode, std::string& cmpl)
         }
 
         v8::String::Utf8Value utf8(isolate, result);
-        out.EndCapture();
         bytecode = out.GetCapture();
     }
-
-    isolate->Dispose();
-    v8::V8::Dispose();
-    v8::V8::ShutdownPlatform();
-    delete create_params.array_buffer_allocator;
+    delete creator;
     return bytecode;
 }
 
@@ -618,48 +656,6 @@ void CompileTest(const std::string& address, const std::string& code)
     btfile.close();
     cmplfile.close();
 }
-
-//Вспомогательные функции теста состояния
-static void SerializedCallback(const v8::FunctionCallbackInfo<v8::Value>& args)
-{
-}
-
-static void NamedPropertyGetterForSerialization(v8::Local<v8::Name> name,
-                                                const v8::PropertyCallbackInfo<v8::Value>& info)
-{
-}
-
-static void AccessorForSerialization(v8::Local<v8::String> property,
-                                     const v8::PropertyCallbackInfo<v8::Value>& info)
-{
-}
-
-static int serialized_static_field = 314;
-
-class SerializedExtension : public v8::Extension
-{
- public:
-    SerializedExtension() : v8::Extension("serialized extension") {}
-
-    virtual v8::Local<v8::FunctionTemplate> GetNativeFunctionTemplate(v8::Isolate* isolate, v8::Local<v8::String> name)
-    {
-        return v8::FunctionTemplate::New(isolate, FunctionCallback);
-    }
-    static void FunctionCallback(const v8::FunctionCallbackInfo<v8::Value>& args)
-    {
-    }
-};
-
-intptr_t original_external_references[] =
-{
-    reinterpret_cast<intptr_t>(SerializedCallback),
-    reinterpret_cast<intptr_t>(&serialized_static_field),
-    reinterpret_cast<intptr_t>(&NamedPropertyGetterForSerialization),
-    reinterpret_cast<intptr_t>(&AccessorForSerialization),
-    reinterpret_cast<intptr_t>(&SerializedExtension::FunctionCallback),
-    reinterpret_cast<intptr_t>(&serialized_static_field),
-    0
-};
 
 void ContractStateTest(const CmdLine& cmdline)
 {
