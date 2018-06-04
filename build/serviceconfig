@@ -1,0 +1,6 @@
+settings =
+{
+        port = 15001;
+        compiledirectory = "compile";
+};
+
