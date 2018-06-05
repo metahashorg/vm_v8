@@ -325,7 +325,8 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
     std::unordered_map<std::string, std::vector<std::string> >::iterator it;
     se->Reload((compileDirectory + "/").c_str());
     it = se->snapshotsnames.find(address);
-
+    StdCapture out;
+    out.BeginCapture();
     v8::StartupData blob;
     //Проверяем есть ли входной снимок
     v8::SnapshotCreator* creator = NULL;
@@ -387,7 +388,7 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
             execresult = *utf8;
         }
     }
-
+    out.EndCapture();
     //Если все прошло удачно, то выгружаем итоговый снимок.
     std::string newsnapsotpath = compileDirectory + "/" + address + "." +
                                  std::to_string(it->second.size()) + ".shot";
