@@ -339,9 +339,7 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
     {
         //Инициализация состояния из снимка
         std::string fullsnappath = compileDirectory + "/" + it->second[it->second.size()-1];
-        printf("loading snapshot %s\n", fullsnappath.c_str());
         snapshot = ReadFile(fullsnappath);
-        printf("snapshot size = %ld\n", snapshot.size());
         if (!snapshot.empty())
         {
             blob.data = snapshot.data();
