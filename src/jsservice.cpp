@@ -339,7 +339,9 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
     {
         //Инициализация состояния из снимка
         std::string fullsnappath = compileDirectory + "/" + it->second[it->second.size()-1];
+        printf("loading snapshot %s\n", fullsnappath.c_str());
         snapshot = ReadFile(fullsnappath);
+        printf("snapshot size = %ld\n", snapshot.size());
         if (!snapshot.empty())
         {
             blob.data = snapshot.data();
@@ -393,13 +395,10 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
     }
 
     //Если все прошло удачно, то выгружаем итоговый снимок.
-    const char* flags = "--expose_gc";
-    v8::V8::SetFlagsFromString(flags, strlen(flags));
     std::string newsnapsotpath = compileDirectory + "/" + address + "." +
                                  std::to_string(it->second.size()) + ".shot";
     std::ofstream snapout(newsnapsotpath.c_str(), std::ios::out | std::ios::app);
     //Запрашиваем сборку мусора перед созданием снимка
-    isolate->RequestGarbageCollectionForTesting(v8::Isolate::kFullGarbageCollection);
     blob = creator->CreateBlob(v8::SnapshotCreator::FunctionCodeHandling::kClear);
     snapout.write(blob.data, blob.raw_size);
     snapout.close();
