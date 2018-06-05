@@ -307,10 +307,6 @@ std::string V8Service::GetBytecode(const char* jscode, std::string& cmpl,
         out.EndCapture();
         bytecode = out.GetCapture();
         //Если все прошло удачно, то выгружаем итоговый снимок.
-        const char* flags = "--expose_gc";
-        v8::V8::SetFlagsFromString(flags, strlen(flags));
-        //Запрашиваем сборку мусора перед созданием снимка
-        isolate->RequestGarbageCollectionForTesting(v8::Isolate::kFullGarbageCollection);
         blob = creator->CreateBlob(v8::SnapshotCreator::FunctionCodeHandling::kClear);
         snapshot.resize(blob.raw_size);
         memcpy(snapshot.data(), blob.data, blob.raw_size);
