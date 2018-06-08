@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sniper/syslog/log.h>
 
 #include "utils.h"
@@ -197,11 +198,18 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
 
 void V8Service::Compile(const std::string& address, const std::string& code)
 {
-    std::string dbgfilepath = compileDirectory + "/" + address + ".dbgi";
-    std::string btfilepath = compileDirectory + "/" + address + ".bc";
-    std::string cmplfilepath = compileDirectory + "/" + address + ".cmpl";
-    std::string errlogfilepath = compileDirectory + "/" + address + ".log";
-    std::string snapshotfilepath = compileDirectory + "/" + address + ".cmpl.shot";
+    std::string addrdir = compileDirectory + "/" + address;
+    const int direrr = mkdir(addrdir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    if (direrr < 0)
+    {
+        printf("Error creating directory!n");
+        return;
+    }
+    std::string dbgfilepath = addrdir + "/" + address + ".dbgi";
+    std::string btfilepath = addrdir + "/" + address + ".bc";
+    std::string cmplfilepath = addrdir + "/" + address + ".cmpl";
+    std::string errlogfilepath = addrdir + "/" + address + ".log";
+    std::string snapshotfilepath = addrdir + "/" + address + ".cmpl.shot";
     std::ofstream dbgfile(dbgfilepath, std::ios::out | std::ios::app);
     std::ofstream btfile(btfilepath, std::ios::out | std::ios::app);
     std::ofstream cmplfile(cmplfilepath, std::ios::out | std::ios::app);
@@ -323,7 +331,7 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
     std::string execresult = "";
     std::string snapshot = "";
     std::unordered_map<std::string, std::vector<std::string> >::iterator it;
-    se->Reload((compileDirectory + "/").c_str());
+    se->Reload((compileDirectory + "/" + address).c_str());
     it = se->snapshotsnames.find(address);
     StdCapture out;
     out.BeginCapture();
@@ -335,7 +343,7 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
     if (it != se->snapshotsnames.end())
     {
         //Инициализация состояния из снимка
-        std::string fullsnappath = compileDirectory + "/" + it->second[it->second.size()-1];
+        std::string fullsnappath = compileDirectory + "/" + address + "/" + it->second[it->second.size()-1];
         snapshot = ReadFile(fullsnappath);
         if (!snapshot.empty())
         {
@@ -390,7 +398,7 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
     }
     out.EndCapture();
     //Если все прошло удачно, то выгружаем итоговый снимок.
-    std::string newsnapsotpath = compileDirectory + "/" + address + "." +
+    std::string newsnapsotpath = compileDirectory + "/" + address + "/" + address + "." +
                                  std::to_string(it->second.size()) + ".shot";
     std::ofstream snapout(newsnapsotpath.c_str(), std::ios::out | std::ios::app);
     //Запрашиваем сборку мусора перед созданием снимка
