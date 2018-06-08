@@ -202,7 +202,7 @@ void V8Service::Compile(const std::string& address, const std::string& code)
     const int direrr = mkdir(addrdir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
     if (direrr < 0)
     {
-        printf("Error creating directory!n");
+        log_err("Error creating directory!n");
         return;
     }
     std::string dbgfilepath = addrdir + "/" + address + ".dbgi";
