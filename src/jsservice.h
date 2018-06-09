@@ -1,6 +1,7 @@
 #include <sniper/mhd/MHD.h>
 #include <include/libplatform/libplatform.h>
 #include <include/v8.h>
+#include "include/v8-profiler.h"
 
 #include "utils.h"
 
@@ -29,6 +30,8 @@ private:
     bool CheckCompileDirectory();
     void Compile(const std::string& address, const std::string& code);
     std::string Run(const std::string& address, const std::string& code);
+    std::string Dump(const std::string& address, const std::string& snapnum);
+
     std::string GetBytecode(const char* jscode, std::string& cmpl,
                             std::vector<uint8_t>& snapshot, std::ofstream& errlog);
     std::vector<LocalStore*> local_store;
@@ -37,5 +40,29 @@ private:
 };
 
 void RunV8Service(const char* configpath);
+
+class HeapSerialize : public v8::OutputStream
+{
+public:
+    HeapSerialize() : v8::OutputStream()
+    {
+        json = "";
+        wait = false;
+    }
+    virtual void EndOfStream(){wait = false;}
+    virtual v8::OutputStream::WriteResult WriteAsciiChunk(char* data, int size)
+    {
+        if (!wait)
+            wait = true;
+        json += std::string(data, size);
+        return v8::OutputStream::kContinue;
+    }
+    void WaitForEnd(){while(wait);}
+    std::string GetJson(){return json;};
+
+private:
+    std::string json;
+    bool wait;
+};
 
 #endif

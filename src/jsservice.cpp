@@ -182,9 +182,29 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
             }
             else
             {
-                //Режим не существует
-                log_err("Command %s not found.\n", action.c_str());
-                mhd_resp.code = HTTP_BAD_REQUEST_CODE;
+                if (action.compare("dump") == 0)
+                {
+                    std::string response = "";
+                    address = mhd_req.params["a"];
+                    std::string snapnum = mhd_req.params["state"];
+                    if (!address.empty() && !snapnum.empty())
+                    {
+                        response = Dump(address, snapnum);
+                        mhd_resp.data = response;
+                        mhd_resp.code = HTTP_OK_CODE;
+                    }
+                    else
+                    {
+                        log_err("One of the parameters for the dump command is not specified.\n");
+                        mhd_resp.code = HTTP_BAD_REQUEST_CODE;
+                    }
+                }
+                else
+                {
+                    //Режим не существует
+                    log_err("Command %s not found.\n", action.c_str());
+                    mhd_resp.code = HTTP_BAD_REQUEST_CODE;
+                }
             }
         }
     }
@@ -399,7 +419,7 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
     out.EndCapture();
     //Если все прошло удачно, то выгружаем итоговый снимок.
     std::string newsnapsotpath = compileDirectory + "/" + address + "/" + address + "." +
-                                 std::to_string(it->second.size()) + ".shot";
+                                 std::to_string(it->second.size()-1) + ".shot";
     std::ofstream snapout(newsnapsotpath.c_str(), std::ios::out | std::ios::app);
     //Запрашиваем сборку мусора перед созданием снимка
     blob = creator->CreateBlob(v8::SnapshotCreator::FunctionCodeHandling::kClear);
@@ -408,6 +428,57 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
     if (creator)
         delete creator;
     return execresult;
+}
+
+std::string V8Service::Dump(const std::string& address, const std::string& snapnum)
+{
+    std::string heapdump = "";
+    v8::StartupData blob;
+    v8::SnapshotCreator* creator = NULL;
+    v8::Isolate* isolate = NULL;
+
+    //Читаем файл со снимком
+    std::string snappath = compileDirectory + "/" + address + "/" + address + "." +
+                                    snapnum + ".shot";
+    std::string snapcontent = ReadFile(snappath);
+    if (!snapcontent.empty())
+    {
+        blob.data = snapcontent.data();
+        blob.raw_size = snapcontent.size();
+        creator = new v8::SnapshotCreator(original_external_references, &blob);
+        if (creator)
+        {
+            isolate = creator->GetIsolate();
+            {
+                v8::HandleScope handle_scope(isolate);
+                v8::TryCatch try_catch(isolate);
+                v8::Local<v8::Context> context = v8::Context::New(isolate);
+                v8::Context::Scope context_scope(context);
+                creator->SetDefaultContext(context);
+                v8::Local<v8::Value> result;
+
+                v8::HeapProfiler* heapprofiler = isolate->GetHeapProfiler();
+                const v8::HeapSnapshot* snapshot = heapprofiler->TakeHeapSnapshot();
+                HeapSerialize s;
+                snapshot->Serialize(&s);
+                s.WaitForEnd();
+
+                heapdump =
+                        "{\n"
+                            "\"vars\" : [],\n"
+                            "\"functions\" : [],\n"
+                            "\"native\" : \n"
+                            + s.GetJson() +
+                        "}";
+            }
+        }
+        else
+            g_errorlog << __FUNCTION__ << ":SnapshotCreator error" << std::endl;
+    }
+    else
+        g_errorlog << __FUNCTION__ << ":Snapshot file reading error" << std::endl;
+
+    return heapdump;
 }
 
 void RunV8Service(const char* configpath)

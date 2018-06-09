@@ -13,6 +13,7 @@
 
 #include "include/libplatform/libplatform.h"
 #include "include/v8.h"
+#include "include/v8-profiler.h"
 
 #include "utils.h"
 #include "stdcapture.hpp"
@@ -40,7 +41,8 @@ enum Mode
     ADDRESS_TEST,
     COMPILE_TEST,
     STATE_TEST,
-    SERVICE_RUN
+    SERVICE_RUN,
+    SNAPSHOT_DUMP_TEST
 };
 
 struct CmdLine
@@ -155,6 +157,13 @@ bool ParseCmdLine(int argc, char** argv, CmdLine& cmdline)
             }
 
         }
+        if (strcmp(argv[2], "dump") == 0 && argc == 7)
+        {
+            cmdline.mode = SNAPSHOT_DUMP_TEST;
+            cmdline.address = argv[4];
+            cmdline.insnap = ReadFile(argv[6]);
+            result = true;
+        }
         if (strcmp(argv[2], "service") == 0 && argc == 4)
         {
             cmdline.mode = SERVICE_RUN;
@@ -181,6 +190,7 @@ void Usage(const char* progname)
             "-mode run -a ADDR -cmd run.js -js FILE.JS -cmpl FILE.cmpl -snap_o I_FILE.shot - contract state test(init from file)\n"
             "-mode run -a ADDR -cmd run.js -snap_i I_FILE.shot -snap_o I_FILE.shot - contract state test(init from snapshot)\n"
             "-mode service [config file path] - run program in service mode\n"
+            "-mode dump -a ADDR -snap_i [snapshot file path] - dump functions and variables from snapshot\n"
             ,
             progname
         );
@@ -759,6 +769,52 @@ void ContractStateTest(const CmdLine& cmdline)
     }
 }
 
+//Тест разбора содержимого снимка
+void SnapshotDumpTest(const CmdLine& cmdline)
+{
+    v8::StartupData blob;
+    v8::SnapshotCreator* creator = NULL;
+    v8::Isolate* isolate = NULL;
+    if (!cmdline.insnap.empty())
+    {
+        blob.data = cmdline.insnap.data();
+        blob.raw_size = cmdline.insnap.size();
+        creator = new v8::SnapshotCreator(original_external_references, &blob);
+        if (creator)
+        {
+            isolate = creator->GetIsolate();
+            {
+                v8::HandleScope handle_scope(isolate);
+                v8::TryCatch try_catch(isolate);
+                v8::Local<v8::Context> context = v8::Context::New(isolate);
+                v8::Context::Scope context_scope(context);
+                creator->SetDefaultContext(context);
+                v8::Local<v8::Value> result;
+
+                v8::HeapProfiler* heapprofiler = isolate->GetHeapProfiler();
+                const v8::HeapSnapshot* snapshot = heapprofiler->TakeHeapSnapshot();
+                HeapSerialize s;
+                snapshot->Serialize(&s);
+                s.WaitForEnd();
+                std::string json = s.GetJson();
+
+                std::string heapdump =
+                                    "{\n"
+                                        "\"vars\" : [],\n"
+                                        "\"functions\" : [],\n"
+                                        "\"native\" : \n"
+                                        + json +
+                                    "}";
+                printf("%s\n", heapdump.c_str());
+            }
+        }
+        else
+            g_errorlog << __FUNCTION__ << ":SnapshotCreator error" << std::endl;
+    }
+    else
+        g_errorlog << __FUNCTION__ << ":Snapshot file reading error" << std::endl;
+}
+
 int main(int argc, char* argv[])
 {
     g_errorlog.open ("err.log", std::ofstream::out | std::ofstream::app);
@@ -816,6 +872,9 @@ int main(int argc, char* argv[])
             ContractStateTest(cmdline);
         if (cmdline.mode == SERVICE_RUN)
             RunV8Service(cmdline.config.c_str());
+        if (cmdline.mode == SNAPSHOT_DUMP_TEST)
+            SnapshotDumpTest(cmdline);
+
     }
     else
     {
