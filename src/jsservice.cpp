@@ -230,16 +230,19 @@ void V8Service::Compile(const std::string& address, const std::string& code)
     std::string cmplfilepath = addrdir + "/" + address + ".cmpl";
     std::string errlogfilepath = addrdir + "/" + address + ".log";
     std::string snapshotfilepath = addrdir + "/" + address + ".cmpl.shot";
+    std::string jsfilepath = addrdir + "/" + address + ".js";
     std::ofstream dbgfile(dbgfilepath, std::ios::out | std::ios::app);
     std::ofstream btfile(btfilepath, std::ios::out | std::ios::app);
     std::ofstream cmplfile(cmplfilepath, std::ios::out | std::ios::app);
     std::ofstream errlogfile(errlogfilepath, std::ios::out | std::ios::app);
     std::ofstream snapshotfile(snapshotfilepath, std::ios::out | std::ios::app);
-    if (!dbgfile || !btfile || !cmplfile || !errlogfile || !snapshotfile)
+     std::ofstream jsfile(jsfilepath, std::ios::out | std::ios::app);
+    if (!dbgfile || !btfile || !cmplfile || !errlogfile || !snapshotfile || !jsfile)
     {
         log_err("Open output files error.\n");
         return;
     }
+    jsfile << code;
     std::string debuglog = "";
     std::string cmpl = "";
     std::vector<uint8_t> snapshot;
@@ -262,6 +265,7 @@ void V8Service::Compile(const std::string& address, const std::string& code)
     cmplfile.close();
     errlogfile.close();
     snapshotfile.close();
+    jsfile.close();
 }
 
 std::string V8Service::GetBytecode(const char* jscode, std::string& cmpl,
@@ -420,7 +424,17 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
     //Если все прошло удачно, то выгружаем итоговый снимок.
     std::string newsnapsotpath = compileDirectory + "/" + address + "/" + address + "." +
                                  std::to_string(it->second.size()-1) + ".shot";
+    std::string cmdjspath = compileDirectory + "/" + address + "/" + address + "." +
+                                 std::to_string(it->second.size()-1) + ".js";
     std::ofstream snapout(newsnapsotpath.c_str(), std::ios::out | std::ios::app);
+    std::ofstream cmdjs(newsnapsotpath.c_str(), std::ios::out | std::ios::app);
+    if (!cmdjs || !snapout)
+    {
+        g_errorlog << __FUNCTION__ << ":Can not open output file" << std::endl;
+        return "";
+    }
+    cmdjs << code;
+    cmdjs.close();
     //Запрашиваем сборку мусора перед созданием снимка
     blob = creator->CreateBlob(v8::SnapshotCreator::FunctionCodeHandling::kClear);
     snapout.write(blob.data, blob.raw_size);

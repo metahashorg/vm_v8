@@ -648,6 +648,7 @@ void CompileTest(const std::string& address, const std::string& code)
         printf("Open output files error.\n");
         return;
     }
+
     std::string debuglog = "";
     std::string cmpl = "";
     std::string bytecode = GetBytecode(code.c_str(), cmpl);
