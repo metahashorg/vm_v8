@@ -427,7 +427,7 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
     std::string cmdjspath = compileDirectory + "/" + address + "/" + address + "." +
                                  std::to_string(it->second.size()-1) + ".js";
     std::ofstream snapout(newsnapsotpath.c_str(), std::ios::out | std::ios::app);
-    std::ofstream cmdjs(newsnapsotpath.c_str(), std::ios::out | std::ios::app);
+    std::ofstream cmdjs(cmdjspath.c_str(), std::ios::out | std::ios::app);
     if (!cmdjs || !snapout)
     {
         g_errorlog << __FUNCTION__ << ":Can not open output file" << std::endl;
