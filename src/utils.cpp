@@ -285,3 +285,24 @@ void SnapshotEnumerator::FindNewestSnapshots()
         it->second[maxnumidx] = lm;
     }
 }
+
+std::string GetNextSnapNumber(const std::string& snapfilename)
+{
+    std::string result = "";
+    std::string snapnum;
+    size_t i,j;
+    i = snapfilename.rfind('.');
+    if (i != std::string::npos)
+    {
+        j = snapfilename.rfind('.', i-1);
+        if (j != std::string::npos)
+        {
+            result = snapfilename.substr(j+1, i-j-1);
+            if (!result.empty())
+            {
+                result = std::to_string(std::stoi(result) + 1);
+            }
+        }
+    }
+    return result;
+}

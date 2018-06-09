@@ -140,7 +140,7 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
     std::string address = "";
     std::string js = "";
     //Получаем режим запроса из url
-    mhd_resp.headers["Content-Type"] = "application/javascript";
+    mhd_resp.headers["Content-Type"] = "text/plain";
     std::string action = mhd_req.params["act"];
     if (!action.empty())
     {
@@ -421,11 +421,13 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
         }
     }
     out.EndCapture();
+    //Определяем номер последнего снимка
+    std::string nextsnapnum = GetNextSnapNumber(it->second[it->second.size()-1]);
     //Если все прошло удачно, то выгружаем итоговый снимок.
     std::string newsnapsotpath = compileDirectory + "/" + address + "/" + address + "." +
-                                 std::to_string(it->second.size()-1) + ".shot";
+                                 nextsnapnum + ".shot";
     std::string cmdjspath = compileDirectory + "/" + address + "/" + address + "." +
-                                 std::to_string(it->second.size()-1) + ".js";
+                                 nextsnapnum + ".js";
     std::ofstream snapout(newsnapsotpath.c_str(), std::ios::out | std::ios::app);
     std::ofstream cmdjs(cmdjspath.c_str(), std::ios::out | std::ios::app);
     if (!cmdjs || !snapout)

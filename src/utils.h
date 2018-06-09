@@ -43,4 +43,6 @@ public:
     std::unordered_map<std::string, std::vector<std::string> > snapshotsnames;
 };
 
+std::string GetNextSnapNumber(const std::string& snapfilename);
+
 #endif
