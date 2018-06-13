@@ -298,9 +298,14 @@ std::string GetNextSnapNumber(const std::string& snapfilename)
         if (j != std::string::npos)
         {
             result = snapfilename.substr(j+1, i-j-1);
-            if (!result.empty())
+            if (result.compare("cmpl") == 0)
+                result = "0";
+            else
             {
-                result = std::to_string(std::stoi(result) + 1);
+                if (!result.empty())
+                {
+                    result = std::to_string(std::stoi(result) + 1);
+                }
             }
         }
     }

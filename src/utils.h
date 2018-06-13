@@ -37,7 +37,7 @@ std::string RemoveColorCharacters(const std::string& text);
 class SnapshotEnumerator
 {
 public:
-    SnapshotEnumerator(const char* directory){Reload(directory);};
+    SnapshotEnumerator(){};
     void Reload(const char* directory);
     void FindNewestSnapshots();
     std::unordered_map<std::string, std::vector<std::string> > snapshotsnames;

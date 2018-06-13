@@ -52,6 +52,7 @@ bool V8Service::init()
         local_store.resize(get_threads());
         for(size_t i = 0; i < local_store.size(); i++)
             local_store[i] = new LocalStore;
+        v8::V8::SetFlagsFromString("--trace-ignition", 16);
     }
     catch (std::exception& e)
     {
@@ -107,8 +108,7 @@ bool V8Service::ReadConfig()
         }
         else
         {
-            std::string dir = compileDirectory + "/";
-            se = new SnapshotEnumerator(dir.c_str());
+            se = new SnapshotEnumerator();
         }
         //Сервис всегда однопоточный
         set_threads(1);
@@ -275,7 +275,6 @@ std::string V8Service::GetBytecode(const char* jscode, std::string& cmpl,
     out.BeginCapture();
     std::string bytecode = "";
     cmpl.clear();
-    v8::V8::SetFlagsFromString("--trace-ignition", 16);
     v8::StartupData blob;
     {
         v8::SnapshotCreator* creator = NULL;
