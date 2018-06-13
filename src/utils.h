@@ -29,6 +29,12 @@ bool CheckBufferSignature(EVP_PKEY* publicKey, const unsigned char* buf,
 bool EVPKEYToAddress(EVP_PKEY* pubkey,
                         uint8_t* out,
                         size_t outsize);
+bool CreateECKeyPairAndAddr(std::string& privkey,
+                            std::string& pubkey,
+                            std::string& address,
+                            uint8_t netbyte = 0,
+                            const char* password = NULL);
+
 std::string ReadFile(const std::string& path);
 std::string BytecodeToListing(const std::string& bytecode);
 void ParseBytecode(const std::string& bytecode, std::unordered_map<std::string, size_t>& instructions);
@@ -44,5 +50,6 @@ public:
 };
 
 std::string GetNextSnapNumber(const std::string& snapfilename);
+bool IsDirectoryExist(const char* dir);
 
 #endif

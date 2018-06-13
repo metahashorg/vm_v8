@@ -5,6 +5,7 @@
 #include <openssl/ripemd.h>
 #include <re2/re2.h>
 #include <dirent.h>
+#include <sys/stat.h>
 
 std::string DumpToHexString(const uint8_t* dump, uint32_t dumpsize)
 {
@@ -90,7 +91,8 @@ bool CheckBufferSignature(EVP_PKEY* publicKey, const unsigned char* buf, size_t 
 bool MhcPubkeyToAddress(uint8_t* in,
                         size_t insize,
                         uint8_t* out,
-                        size_t outsize)
+                        size_t outsize,
+                        uint8_t netbyte = 0)
 {
     if (insize != PUBKEY_LENGTH || outsize != ADDRESS_LENGTH)
         return false;
@@ -104,7 +106,7 @@ bool MhcPubkeyToAddress(uint8_t* in,
         SHA256_Update(&sha256_firstpass, in, insize);
         SHA256_Final(sha256hash, &sha256_firstpass);
         //Сетевой байт
-        out[0] = 0;
+        out[0] = netbyte;
         //RIPEMD160-хэш от предыдущего
         RIPEMD160_CTX ripemd160;
         RIPEMD160_Init(&ripemd160);
@@ -129,8 +131,8 @@ bool MhcPubkeyToAddress(uint8_t* in,
 }
 
 bool EVPKEYToAddress(EVP_PKEY* pubkey,
-                        uint8_t* out,
-                        size_t outsize)
+                     uint8_t* out,
+                     size_t outsize)
 {
     bool result = false;
     if (pubkey && out && outsize == ADDRESS_LENGTH)
@@ -146,6 +148,71 @@ bool EVPKEYToAddress(EVP_PKEY* pubkey,
             delete[] data;
     }
     return result;
+}
+
+//Создание пары ключей и адреса
+bool CreateECKeyPairAndAddr(std::string& privkey,
+                            std::string& pubkey,
+                            std::string& address,
+                            uint8_t netbyte,
+                            const char* password)
+{
+    EC_KEY* myecc  = NULL;
+    unsigned char* privkeydata = NULL;
+    unsigned char* pubkeydata = NULL;
+    int eccgrp;
+    bool rslt = false;
+    const char* pass = NULL;
+    const EVP_CIPHER* cipher = NULL;
+
+    eccgrp = OBJ_txt2nid("prime256v1");
+    myecc = EC_KEY_new_by_curve_name(eccgrp);
+    EC_KEY_set_asn1_flag(myecc, OPENSSL_EC_NAMED_CURVE);
+
+    if (EC_KEY_generate_key(myecc) > 0)
+    {
+        if (password)
+        {
+            pass = password;
+            cipher = EVP_aes_128_cbc();
+        }
+        (void)cipher;
+        (void)pass;
+
+        //Сохраняем ключи в двоичной форме
+        int pubkeysize = i2d_EC_PUBKEY(myecc, &pubkeydata);
+        int privkeysize = i2d_ECPrivateKey(myecc, &privkeydata);
+        if (pubkeysize && privkeysize)
+        {
+            //Переводим в hex
+            pubkey = DumpToHexString(pubkeydata, pubkeysize);
+            privkey = DumpToHexString(privkeydata, privkeysize);
+            //Генерируем адрес
+            if (pubkeysize >= 65)
+            {
+                pubkeydata[pubkeysize - 65] = 0x04;
+                uint8_t out[25];
+                char addr[51];
+                if (MhcPubkeyToAddress(pubkeydata + (pubkeysize - 65), 65, out, 25, netbyte))
+                {
+                    //Печатаем адрес в строку
+                    for (size_t i = 0; i < 25; ++i)
+                        sprintf(addr + i*2, "%02x", out[i]);
+                    addr[50] = '\0';
+                    address = addr;
+                    rslt = true;
+                }
+            }
+        }
+    }
+
+    if (privkeydata)
+        delete[] privkeydata;
+    if (pubkeydata)
+        delete[] pubkeydata;
+    EC_KEY_free(myecc);
+
+    return rslt;
 }
 
 std::string ReadFile(const std::string& path)
@@ -310,4 +377,13 @@ std::string GetNextSnapNumber(const std::string& snapfilename)
         }
     }
     return result;
+}
+
+bool IsDirectoryExist(const char* dir)
+{
+    bool rslt = false;
+    struct stat st;
+    if (stat(dir, &st) == 0)
+        rslt = (st.st_mode & (S_IFDIR != 0));
+    return rslt;
 }

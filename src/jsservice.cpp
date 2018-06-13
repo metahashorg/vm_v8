@@ -8,7 +8,6 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <sniper/syslog/log.h>
 
 #include "utils.h"
@@ -101,7 +100,7 @@ bool V8Service::ReadConfig()
             return false;
         }
         //Проверяем существование директории compileDirectory
-        if (!CheckCompileDirectory())
+        if (!IsDirectoryExist(compileDirectory.c_str()))
         {
             log_err("Invalid compiledirectory parameter.\n");
             return false;
@@ -109,6 +108,16 @@ bool V8Service::ReadConfig()
         else
         {
             se = new SnapshotEnumerator();
+        }
+        if (!settings.lookupValue("keysdirectory", keysDirectory))
+        {
+            log_err("keysdirectory not found.\n");
+            return false;
+        }
+        if (!IsDirectoryExist(keysDirectory.c_str()))
+        {
+            log_err("Invalid keysdirectory parameter.\n");
+            return false;
         }
         //Сервис всегда однопоточный
         set_threads(1);
@@ -124,15 +133,6 @@ bool V8Service::ReadConfig()
     }
 
     return false;
-}
-
-bool V8Service::CheckCompileDirectory()
-{
-    bool rslt = false;
-    struct stat st;
-    if (stat(compileDirectory.c_str(), &st) == 0)
-        rslt = (st.st_mode & (S_IFDIR != 0));
-    return rslt;
 }
 
 void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
@@ -201,9 +201,39 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
                 }
                 else
                 {
-                    //Режим не существует
-                    log_err("Command %s not found.\n", action.c_str());
-                    mhd_resp.code = HTTP_BAD_REQUEST_CODE;
+                    if (action.compare("mh_gen") == 0)
+                    {
+                        mhd_resp.code = HTTP_BAD_REQUEST_CODE;
+                        std::string firstbyte = mhd_req.params["byte"];//В шестнадцатеричной форме
+                        try
+                        {
+                            int byteint = std::stoi(firstbyte, 0, 16);
+                            if (byteint > 0 && byteint < 256)
+                            {
+                                uint8_t byte = (uint8_t)byteint;
+                                std::string newaddr = CreateAddress(byte);
+                                if (!newaddr.empty())
+                                {
+                                    mhd_resp.data = newaddr;
+                                    mhd_resp.code = HTTP_OK_CODE;
+                                }
+                                else
+                                    log_err("Create address error.\n");
+                            }
+                            else
+                                log_err("Invalid byte value.\n");
+                        }
+                        catch (std::exception& ex)
+                        {
+                            log_err("Invalid byte value.\n");
+                        }
+                    }
+                    else
+                    {
+                        //Режим не существует
+                        log_err("Command %s not found.\n", action.c_str());
+                        mhd_resp.code = HTTP_BAD_REQUEST_CODE;
+                    }
                 }
             }
         }
@@ -494,6 +524,42 @@ std::string V8Service::Dump(const std::string& address, const std::string& snapn
         g_errorlog << __FUNCTION__ << ":Snapshot file reading error" << std::endl;
 
     return heapdump;
+}
+
+std::string V8Service::CreateAddress(uint8_t firstbyte)
+{
+    std::string pubkey = "";
+    std::string privkey = "";
+    std::string address = "";
+
+    if (CreateECKeyPairAndAddr(privkey, pubkey, address, firstbyte))
+    {
+        //Сохраняем ключи в директории keysDirectory
+        std::string addrdir = keysDirectory + "/" + address;
+        const int direrr = mkdir(addrdir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+        if (direrr < 0)
+        {
+            log_err("Error creating directory!n");
+            return "";
+        }
+        std::string pubkeypath = addrdir + "/" + address + ".pub.der";
+        std::string privkeypath = addrdir + "/" + address + ".priv.der";
+        std::ofstream pubkeyfile(pubkeypath, std::ios::out | std::ios::app);
+        std::ofstream privkeyfile(privkeypath, std::ios::out | std::ios::app);
+        if (!pubkeyfile || !privkeyfile)
+        {
+            log_err("Error opening key files");
+            return "";
+        }
+        pubkeyfile << pubkey;
+        privkeyfile << privkey;
+        pubkeyfile.close();
+        privkeyfile.close();
+
+        return address;
+    }
+    else
+        return "";
 }
 
 void RunV8Service(const char* configpath)
