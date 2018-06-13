@@ -208,7 +208,7 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
                         try
                         {
                             int byteint = std::stoi(firstbyte, 0, 16);
-                            if (byteint > 0 && byteint < 256)
+                            if (byteint >= 0 && byteint < 256)
                             {
                                 uint8_t byte = (uint8_t)byteint;
                                 std::string newaddr = CreateAddress(byte);
@@ -535,6 +535,7 @@ std::string V8Service::CreateAddress(uint8_t firstbyte)
     if (CreateECKeyPairAndAddr(privkey, pubkey, address, firstbyte))
     {
         //Сохраняем ключи в директории keysDirectory
+        address = "0x" + address;
         std::string addrdir = keysDirectory + "/" + address;
         const int direrr = mkdir(addrdir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
         if (direrr < 0)
