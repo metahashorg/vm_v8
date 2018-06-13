@@ -192,14 +192,9 @@ bool CreateECKeyPairAndAddr(std::string& privkey,
             {
                 pubkeydata[pubkeysize - 65] = 0x04;
                 uint8_t out[25];
-                char addr[51];
                 if (MhcPubkeyToAddress(pubkeydata + (pubkeysize - 65), 65, out, 25, netbyte))
                 {
-                    //Печатаем адрес в строку
-                    for (size_t i = 0; i < 25; ++i)
-                        sprintf(addr + i*2, "%02x", out[i]);
-                    addr[50] = '\0';
-                    address = addr;
+                    address = DumpToHexString(out, 25);
                     rslt = true;
                 }
             }
