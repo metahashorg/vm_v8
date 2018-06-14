@@ -531,7 +531,6 @@ std::string V8Service::CreateAddress(uint8_t firstbyte)
     std::string pubkey = "";
     std::string privkey = "";
     std::string address = "";
-
     if (CreateECKeyPairAndAddr(privkey, pubkey, address, firstbyte))
     {
         //Сохраняем ключи в директории keysDirectory
