@@ -835,6 +835,8 @@ std::string DumpSimpleType(const v8::Local<v8::Context>& context,
     {
         double val = value->ToNumber(context).ToLocalChecked()->Value();
         line = std::to_string(val);
+        if (line.compare("nan") == 0 || line.compare("inf") == 0)
+            line = "\"" + line + "\"";
         if (!name.empty())
             line = "\"" + name + "\" : " + line;
     }
@@ -969,7 +971,6 @@ void SnapshotDumpTest(const CmdLine& cmdline)
                     v8::Local<v8::String> objname = v8::String::NewFromUtf8(isolate,
                                                     symbols[v8::HeapGraphNode::kObject][i].c_str(),
                                                     v8::NewStringType::kNormal).ToLocalChecked();
-                    printf("name = %s\n", symbols[v8::HeapGraphNode::kObject][i].c_str());
                     //Получаем значение из контекста не вложенной переменной
                     v8::Local<v8::Value> value = context->Global()->Get(context, objname).ToLocalChecked();
                     if (value->IsArray())
@@ -984,20 +985,30 @@ void SnapshotDumpTest(const CmdLine& cmdline)
                         else
                             line = DumpSimpleType(context, value, symbols[v8::HeapGraphNode::kObject][i]);
                     }
-                    printf("line = %s\n", line.c_str());
-                    printf("------------------------------\n");
                     objdumps.push_back(line);
                 }
             }
-           // for (i = 0; i < objdumps.size(); ++i)
-            //    printf("%s\n--------------------------------\n", objdumps[i].c_str());
 
-           /*HeapSerialize s;
+            //Делаем снимок кучи в стандартном для v8 формате
+            HeapSerialize s;
             snapshot->Serialize(&s);
             s.WaitForEnd();
             std::string json = s.GetJson();
-            printf("%s\n", json.c_str());*/
 
+            //Собираем итоговый Json.
+            std::string heapdump =
+                        "{\n"
+                            "\"vars\" : [";
+            for (i = 0; i < objdumps.size(); ++i)
+                heapdump += "{" + objdumps[i] + "},\n";
+            if (heapdump.size() > 2)
+                heapdump.erase(heapdump.size()-2, 2);
+            heapdump +=    "],\n"
+                            "\"functions\" : [],\n"
+                            "\"native\" : \n"
+                            + s.GetJson() +
+                        "}";
+            printf("%s\n", heapdump.c_str());
         }
     }
 }
