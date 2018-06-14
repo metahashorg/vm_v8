@@ -813,38 +813,39 @@ std::string DumpSimpleType(const v8::Local<v8::Context>& context,
         v8str->WriteUtf8((char*)str.data(), len);
         line = str;
         if (!name.empty())
-            line = "{\"" + name + "\" : \"" + line + "\"}";
+            line = "\"" + name + "\" : \"" + line + "\"";
+        else
+            line = "\"" + line + "\"";
     }
     if (value->IsInt32())
     {
         int val = value->ToInt32(context).ToLocalChecked()->Value();
         line = std::to_string(val);
         if (!name.empty())
-            line = "{\"" + name + "\" : " + line + "}";
+            line = "\"" + name + "\" : " + line;
     }
     if (value->IsUint32())
     {
         uint32_t val = value->ToUint32(context).ToLocalChecked()->Value();
         line = std::to_string(val);
         if (!name.empty())
-            line = "{\"" + name + "\" : " + line + "}";
+            line = "\"" + name + "\" : " + line;
     }
     if (value->IsNumber())
     {
         double val = value->ToNumber(context).ToLocalChecked()->Value();
         line = std::to_string(val);
         if (!name.empty())
-            line = "{\"" + name + "\" : " + line + "}";
+            line = "\"" + name + "\" : " + line;
     }
     if (value->IsBoolean())
     {
         bool val = value->ToBoolean(context).ToLocalChecked()->Value();
-        line = "{\"" + name + "\" : ";
+        line = "\"" + name + "\" : ";
         if (val)
             line += "true";
         else
             line += "false";
-        line += "}";
     }
     if (value->IsFunction())
         line += "function";
@@ -862,14 +863,14 @@ std::string DumpArrayType(const v8::Local<v8::Context>& context,
 {
     std::string propname = "";
     std::string line = "";
-    line += name + " : [";
+    line += "\"" + name + "\"" + " : [";
     if (value->IsArray())
     {
         for (size_t i = 0; i < value->Length(); ++i)
         {
             v8::Local<v8::Value> elem = value->Get(context, i).ToLocalChecked();
             if (elem->IsObject())
-                line += DumpObjectType(context, elem, propname) + ",\n";
+                line += DumpObjectType(context, elem, name) + ",\n";
             else
             {
                 if (elem->IsArray())
@@ -882,32 +883,32 @@ std::string DumpArrayType(const v8::Local<v8::Context>& context,
             }
         }
     }
+    line.erase(line.size()-2, 2);
     line += "]";
     return line;
 }
 
 std::string DumpObjectType(const v8::Local<v8::Context>& context,
                             const v8::Local<v8::Value>& value,
-                            const std::string& name)
+                            const std::string& objname)
 {
-    std::string line = "";
+    std::string line = "{";
     std::string propname = "";
     if (value->IsObject())
     {
         v8::Local<v8::Object> obj = value->ToObject(context).ToLocalChecked();
         //Получаем список имен полей
-        v8::Local<v8::Array> propnames = obj->GetPropertyNames(context).ToLocalChecked();
+        v8::Local<v8::Array> propnames = obj->GetOwnPropertyNames(context, v8::ONLY_CONFIGURABLE).ToLocalChecked();
         for (size_t i = 0; i < propnames->Length(); ++i)
         {
             //Имя поля
             v8::Local<v8::Value> name = propnames->Get(context, i).ToLocalChecked();
             if (name->IsString())
             {
-                v8::Local<v8::String> v8str = value->ToString();
+                v8::Local<v8::String> v8str = name->ToString();
                 int len = v8str->Utf8Length();
                 propname.resize(len);
                 v8str->WriteUtf8((char*)propname.data(), len);
-
                 //Значение поля
                 v8::Local<v8::Value> val = obj->Get(context, name).ToLocalChecked();
                 if (val->IsObject())//Простой тип
@@ -917,15 +918,17 @@ std::string DumpObjectType(const v8::Local<v8::Context>& context,
                     if (val->IsArray())
                     {
                         v8::Local<v8::Array> arr = v8::Local<v8::Array>::Cast(val);
-                        line += DumpArrayType(context, arr, propname) + "\n";
+                        line += DumpArrayType(context, arr, propname) + ",\n";
                     }
                     else
-                        line += DumpSimpleType(context, val, propname) + "\n";
+                        line += DumpSimpleType(context, val, propname) + ",\n";
                 }
-
             }
         }
     }
+    if (line.size() > 2)
+        line.erase(line.size()-2, 2);
+    line = "\"" + objname + "\" : " + line + "}";
     return line;
 }
 
@@ -955,12 +958,10 @@ void SnapshotDumpTest(const CmdLine& cmdline)
             v8::HeapProfiler* heapprofiler = isolate->GetHeapProfiler();
             const v8::HeapSnapshot* snapshot = heapprofiler->TakeHeapSnapshot();
             const v8::HeapGraphNode* node = snapshot->GetRoot()->GetChild(1)->GetToNode();
-
             GetProperties(isolate, node, symbols);
             //Получаем значения переменных по имени из контекста
             std::vector<std::string> objdumps;
-            std::string line;
-
+            std::string line = "";
             if (!symbols[v8::HeapGraphNode::kObject].empty())
             {
                 for (i = 0; i < symbols[v8::HeapGraphNode::kObject].size(); ++i)
@@ -968,6 +969,7 @@ void SnapshotDumpTest(const CmdLine& cmdline)
                     v8::Local<v8::String> objname = v8::String::NewFromUtf8(isolate,
                                                     symbols[v8::HeapGraphNode::kObject][i].c_str(),
                                                     v8::NewStringType::kNormal).ToLocalChecked();
+                    printf("name = %s\n", symbols[v8::HeapGraphNode::kObject][i].c_str());
                     //Получаем значение из контекста не вложенной переменной
                     v8::Local<v8::Value> value = context->Global()->Get(context, objname).ToLocalChecked();
                     if (value->IsArray())
@@ -978,14 +980,17 @@ void SnapshotDumpTest(const CmdLine& cmdline)
                     else
                     {
                         if (value->IsObject())
-                            line = DumpObjectType(context, value, symbols[v8::HeapGraphNode::kObject][i]);
+                            line = DumpObjectType(context, value, symbols[v8::HeapGraphNode::kObject][i].c_str());
                         else
                             line = DumpSimpleType(context, value, symbols[v8::HeapGraphNode::kObject][i]);
                     }
-
+                    printf("line = %s\n", line.c_str());
+                    printf("------------------------------\n");
                     objdumps.push_back(line);
                 }
             }
+           // for (i = 0; i < objdumps.size(); ++i)
+            //    printf("%s\n--------------------------------\n", objdumps[i].c_str());
 
            /*HeapSerialize s;
             snapshot->Serialize(&s);
