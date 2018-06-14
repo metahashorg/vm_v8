@@ -968,10 +968,21 @@ void SnapshotDumpTest(const CmdLine& cmdline)
                     v8::Local<v8::String> objname = v8::String::NewFromUtf8(isolate,
                                                     symbols[v8::HeapGraphNode::kObject][i].c_str(),
                                                     v8::NewStringType::kNormal).ToLocalChecked();
-                    //Получаем значение из контекста
+                    //Получаем значение из контекста не вложенной переменной
                     v8::Local<v8::Value> value = context->Global()->Get(context, objname).ToLocalChecked();
-                    line = DumpSimpleType(context, value, symbols[v8::HeapGraphNode::kObject][i]);
-                    printf("%s\n", line.c_str());
+                    if (value->IsArray())
+                    {
+                        v8::Local<v8::Array> arr = v8::Local<v8::Array>::Cast(value);
+                        line = DumpArrayType(context, arr, symbols[v8::HeapGraphNode::kObject][i]);
+                    }
+                    else
+                    {
+                        if (value->IsObject())
+                            line = DumpObjectType(context, value, symbols[v8::HeapGraphNode::kObject][i]);
+                        else
+                            line = DumpSimpleType(context, value, symbols[v8::HeapGraphNode::kObject][i]);
+                    }
+
                     objdumps.push_back(line);
                 }
             }
