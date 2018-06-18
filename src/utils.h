@@ -19,6 +19,10 @@
 #ifndef UTILS
 #define UTILS
 
+#include "include/libplatform/libplatform.h"
+#include "include/v8.h"
+#include "include/v8-profiler.h"
+
 std::string DumpToHexString(const std::string& dump);
 std::string DumpToHexString(const uint8_t* dump, uint32_t dumpsize);
 void HexStringToDump(const std::string& hexstr, std::vector<uint8_t>& dump);
@@ -52,4 +56,11 @@ public:
 std::string GetNextSnapNumber(const std::string& snapfilename);
 bool IsDirectoryExist(const char* dir);
 
+void GetProperties(v8::Isolate* isolate,
+                const v8::HeapGraphNode* node,
+                std::vector<std::vector<std::string>>& symbols);
+const v8::HeapGraphNode* GetProperty(v8::Isolate* isolate,
+                                            const v8::HeapGraphNode* node,
+                                            v8::HeapGraphEdge::Type type,
+                                            const char* name);
 #endif

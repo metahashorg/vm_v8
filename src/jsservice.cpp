@@ -502,19 +502,59 @@ std::string V8Service::Dump(const std::string& address, const std::string& snapn
                 creator->SetDefaultContext(context);
                 v8::Local<v8::Value> result;
 
+                //Перебираем переменные в куче.
+                size_t i = 0;
+                std::vector<std::vector<std::string>> symbols;
+                symbols.resize(14);//Колл-во типов HeapGraphNode
                 v8::HeapProfiler* heapprofiler = isolate->GetHeapProfiler();
                 const v8::HeapSnapshot* snapshot = heapprofiler->TakeHeapSnapshot();
-                HeapSerialize s;
-                snapshot->Serialize(&s);
-                s.WaitForEnd();
+                const v8::HeapGraphNode* node = snapshot->GetRoot()->GetChild(1)->GetToNode();
+                GetProperties(isolate, node, symbols);
 
-                heapdump =
-                        "{\n"
-                            "\"vars\" : [],\n"
-                            "\"functions\" : [],\n"
-                            "\"native\" : \n"
-                            + s.GetJson() +
-                        "}";
+                //Получаем значения переменных по имени из контекста
+                std::string line = "";
+                std::unordered_map<std::string, std::string> variables;
+                std::vector<std::string> functions;
+                if (!symbols[v8::HeapGraphNode::kObject].empty())
+                {
+                    for (i = 0; i < symbols[v8::HeapGraphNode::kObject].size(); ++i)
+                    {
+                        v8::Local<v8::String> objname = v8::String::NewFromUtf8(isolate,
+                                                        symbols[v8::HeapGraphNode::kObject][i].c_str(),
+                                                        v8::NewStringType::kNormal).ToLocalChecked();
+                        //Получаем значение из контекста не вложенной переменной
+                        v8::Local<v8::Value> value = context->Global()->Get(context, objname).ToLocalChecked();
+                        if (value->IsFunction())
+                            functions.push_back(symbols[v8::HeapGraphNode::kObject][i].c_str());
+                        else
+                        {
+                            //Получаем json, соответствующий объекту
+                            v8::Local<v8::String> jsonvalue = v8::JSON::Stringify(context, value).ToLocalChecked();
+                            v8::String::Utf8Value obj(isolate, jsonvalue);
+                            variables[symbols[v8::HeapGraphNode::kObject][i]] = *obj;
+                        }
+                    }
+                }
+
+                //Собираем итоговый Json.
+                std::string heapdump =
+                            "{\n"
+                                "\"vars\" : [";
+                //Добавляем все переменные
+                for (auto it = variables.begin(); it != variables.end(); ++it)
+                {
+                    if (it->second.compare("undefined") != 0)
+                        heapdump += "{\"" + it->first + "\":" + it->second + "},\n";
+                }
+                heapdump = heapdump.substr(0, heapdump.size()-2);
+                //Функции пока отсутствуют
+                heapdump +=    "],\n"
+                                "\"functions\" : [\n";
+                for (i = 0; i < functions.size(); ++i)
+                    heapdump += "\"" + functions[i] + "\",\n";
+                heapdump = heapdump.substr(0, heapdump.size()-2);
+                heapdump +=     "]}";
+
             }
         }
         else

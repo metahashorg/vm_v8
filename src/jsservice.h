@@ -41,29 +41,4 @@ private:
 };
 
 void RunV8Service(const char* configpath);
-
-class HeapSerialize : public v8::OutputStream
-{
-public:
-    HeapSerialize() : v8::OutputStream()
-    {
-        json = "";
-        wait = false;
-    }
-    virtual void EndOfStream(){wait = false;}
-    virtual v8::OutputStream::WriteResult WriteAsciiChunk(char* data, int size)
-    {
-        if (!wait)
-            wait = true;
-        json += std::string(data, size);
-        return v8::OutputStream::kContinue;
-    }
-    void WaitForEnd(){while(wait);}
-    std::string GetJson(){return json;};
-
-private:
-    std::string json;
-    bool wait;
-};
-
 #endif

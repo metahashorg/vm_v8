@@ -382,3 +382,30 @@ bool IsDirectoryExist(const char* dir)
         rslt = (st.st_mode & (S_IFDIR != 0));
     return rslt;
 }
+
+void GetProperties(v8::Isolate* isolate,
+                const v8::HeapGraphNode* node,
+                std::vector<std::vector<std::string>>& symbols)
+{
+    for (int i = 0, count = node->GetChildrenCount(); i < count; ++i)
+    {
+        const v8::HeapGraphEdge* prop = node->GetChild(i);
+        v8::String::Utf8Value node_name(isolate, prop->GetName());
+        symbols[node->GetType()].push_back(*node_name);
+    }
+}
+
+const v8::HeapGraphNode* GetProperty(v8::Isolate* isolate,
+                                            const v8::HeapGraphNode* node,
+                                            v8::HeapGraphEdge::Type type,
+                                            const char* name)
+{
+    for (int i = 0, count = node->GetChildrenCount(); i < count; ++i)
+    {
+        const v8::HeapGraphEdge* prop = node->GetChild(i);
+        v8::String::Utf8Value prop_name(isolate, prop->GetName());
+        if (prop->GetType() == type && strcmp(name, *prop_name) == 0)
+            return prop->GetToNode();
+  }
+  return NULL;
+}

@@ -771,7 +771,7 @@ void ContractStateTest(const CmdLine& cmdline)
 }
 
 //Тест разбора содержимого снимка
-void GetProperties(v8::Isolate* isolate,
+/*void GetProperties(v8::Isolate* isolate,
                 const v8::HeapGraphNode* node,
                 std::vector<std::vector<std::string>>& symbols)
 {
@@ -796,7 +796,7 @@ const v8::HeapGraphNode* GetProperty(v8::Isolate* isolate,
             return prop->GetToNode();
   }
   return NULL;
-}
+}*/
 
 //Версия с JSON::Stringify
 void SnapshotDumpTest(const CmdLine& cmdline)
@@ -852,11 +852,6 @@ void SnapshotDumpTest(const CmdLine& cmdline)
                 }
             }
 
-            //Делаем снимок кучи в стандартном для v8 формате
-            HeapSerialize s;
-            snapshot->Serialize(&s);
-            s.WaitForEnd();
-            std::string json = s.GetJson();
             //Собираем итоговый Json.
             std::string heapdump =
                         "{\n"
@@ -874,10 +869,7 @@ void SnapshotDumpTest(const CmdLine& cmdline)
             for (i = 0; i < functions.size(); ++i)
                 heapdump += "\"" + functions[i] + "\",\n";
             heapdump = heapdump.substr(0, heapdump.size()-2);
-            heapdump +=     "],\n"
-                            "\"native\" : \n"
-                            + s.GetJson() +
-                        "}";
+            heapdump +=     "]}";
             printf("%s\n", heapdump.c_str());
         }
     }
