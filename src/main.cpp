@@ -829,7 +829,8 @@ void SnapshotDumpTest(const CmdLine& cmdline)
 
             //Получаем значения переменных по имени из контекста
             std::string line = "";
-            std::unordered_map<std::string, std::string> objects;
+            std::unordered_map<std::string, std::string> variables;
+            std::vector<std::string> functions;
             if (!symbols[v8::HeapGraphNode::kObject].empty())
             {
                 for (i = 0; i < symbols[v8::HeapGraphNode::kObject].size(); ++i)
@@ -839,10 +840,15 @@ void SnapshotDumpTest(const CmdLine& cmdline)
                                                     v8::NewStringType::kNormal).ToLocalChecked();
                     //Получаем значение из контекста не вложенной переменной
                     v8::Local<v8::Value> value = context->Global()->Get(context, objname).ToLocalChecked();
-                    //Получаем json, соответствующий объекту
-                    v8::Local<v8::String> jsonvalue = v8::JSON::Stringify(context, value).ToLocalChecked();
-                    v8::String::Utf8Value obj(isolate, jsonvalue);
-                    objects[symbols[v8::HeapGraphNode::kObject][i]] = *obj;
+                    if (value->IsFunction())
+                        functions.push_back(symbols[v8::HeapGraphNode::kObject][i].c_str());
+                    else
+                    {
+                        //Получаем json, соответствующий объекту
+                        v8::Local<v8::String> jsonvalue = v8::JSON::Stringify(context, value).ToLocalChecked();
+                        v8::String::Utf8Value obj(isolate, jsonvalue);
+                        variables[symbols[v8::HeapGraphNode::kObject][i]] = *obj;
+                    }
                 }
             }
 
@@ -855,9 +861,8 @@ void SnapshotDumpTest(const CmdLine& cmdline)
             std::string heapdump =
                         "{\n"
                             "\"vars\" : [";
-
             //Добавляем все переменные
-            for (auto it = objects.begin(); it != objects.end(); ++it)
+            for (auto it = variables.begin(); it != variables.end(); ++it)
             {
                 if (it->second.compare("undefined") != 0)
                     heapdump += "{\"" + it->first + "\":" + it->second + "},\n";
@@ -865,7 +870,11 @@ void SnapshotDumpTest(const CmdLine& cmdline)
             heapdump = heapdump.substr(0, heapdump.size()-2);
             //Функции пока отсутствуют
             heapdump +=    "],\n"
-                            "\"functions\" : [],\n"
+                            "\"functions\" : [\n";
+            for (i = 0; i < functions.size(); ++i)
+                heapdump += "\"" + functions[i] + "\",\n";
+            heapdump = heapdump.substr(0, heapdump.size()-2);
+            heapdump +=     "],\n"
                             "\"native\" : \n"
                             + s.GetJson() +
                         "}";
