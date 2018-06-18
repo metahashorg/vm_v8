@@ -798,142 +798,7 @@ const v8::HeapGraphNode* GetProperty(v8::Isolate* isolate,
   return NULL;
 }
 
-std::string DumpSimpleType(const v8::Local<v8::Context>& context,
-                            const v8::Local<v8::Value>& value,
-                            const std::string& name)
-{
-    std::string line = "";
-    //Переводим в строку в зависимости от типа
-    if (value->IsString())
-    {
-        std::string str = "";
-        v8::Local<v8::String> v8str = value->ToString();
-        int len = v8str->Utf8Length();
-        str.resize(len);
-        v8str->WriteUtf8((char*)str.data(), len);
-        line = str;
-        if (!name.empty())
-            line = "\"" + name + "\" : \"" + line + "\"";
-        else
-            line = "\"" + line + "\"";
-    }
-    if (value->IsInt32())
-    {
-        int val = value->ToInt32(context).ToLocalChecked()->Value();
-        line = std::to_string(val);
-        if (!name.empty())
-            line = "\"" + name + "\" : " + line;
-    }
-    if (value->IsUint32())
-    {
-        uint32_t val = value->ToUint32(context).ToLocalChecked()->Value();
-        line = std::to_string(val);
-        if (!name.empty())
-            line = "\"" + name + "\" : " + line;
-    }
-    if (value->IsNumber())
-    {
-        double val = value->ToNumber(context).ToLocalChecked()->Value();
-        line = std::to_string(val);
-        if (line.compare("nan") == 0 || line.compare("inf") == 0)
-            line = "\"" + line + "\"";
-        if (!name.empty())
-            line = "\"" + name + "\" : " + line;
-    }
-    if (value->IsBoolean())
-    {
-        bool val = value->ToBoolean(context).ToLocalChecked()->Value();
-        line = "\"" + name + "\" : ";
-        if (val)
-            line += "true";
-        else
-            line += "false";
-    }
-    if (value->IsFunction())
-        line += "function";
-
-    return line;
-}
-
-std::string DumpObjectType(const v8::Local<v8::Context>& context,
-                            const v8::Local<v8::Value>& value,
-                            const std::string& name);
-
-std::string DumpArrayType(const v8::Local<v8::Context>& context,
-                            const v8::Local<v8::Array>& value,
-                            const std::string& name)
-{
-    std::string propname = "";
-    std::string line = "";
-    line += "\"" + name + "\"" + " : [";
-    if (value->IsArray())
-    {
-        for (size_t i = 0; i < value->Length(); ++i)
-        {
-            v8::Local<v8::Value> elem = value->Get(context, i).ToLocalChecked();
-            if (elem->IsObject())
-                line += DumpObjectType(context, elem, name) + ",\n";
-            else
-            {
-                if (elem->IsArray())
-                {
-                    v8::Local<v8::Array> arr = v8::Local<v8::Array>::Cast(elem);
-                    line += DumpArrayType(context, arr, propname) + ",\n";
-                }
-                else
-                    line += DumpSimpleType(context, elem, propname) + ",\n";
-            }
-        }
-    }
-    line.erase(line.size()-2, 2);
-    line += "]";
-    return line;
-}
-
-std::string DumpObjectType(const v8::Local<v8::Context>& context,
-                            const v8::Local<v8::Value>& value,
-                            const std::string& objname)
-{
-    std::string line = "{";
-    std::string propname = "";
-    if (value->IsObject())
-    {
-        v8::Local<v8::Object> obj = value->ToObject(context).ToLocalChecked();
-        //Получаем список имен полей
-        v8::Local<v8::Array> propnames = obj->GetOwnPropertyNames(context, v8::ONLY_CONFIGURABLE).ToLocalChecked();
-        for (size_t i = 0; i < propnames->Length(); ++i)
-        {
-            //Имя поля
-            v8::Local<v8::Value> name = propnames->Get(context, i).ToLocalChecked();
-            if (name->IsString())
-            {
-                v8::Local<v8::String> v8str = name->ToString();
-                int len = v8str->Utf8Length();
-                propname.resize(len);
-                v8str->WriteUtf8((char*)propname.data(), len);
-                //Значение поля
-                v8::Local<v8::Value> val = obj->Get(context, name).ToLocalChecked();
-                if (val->IsObject())//Простой тип
-                    line += DumpObjectType(context, val, propname) + ",\n";
-                else
-                {
-                    if (val->IsArray())
-                    {
-                        v8::Local<v8::Array> arr = v8::Local<v8::Array>::Cast(val);
-                        line += DumpArrayType(context, arr, propname) + ",\n";
-                    }
-                    else
-                        line += DumpSimpleType(context, val, propname) + ",\n";
-                }
-            }
-        }
-    }
-    if (line.size() > 2)
-        line.erase(line.size()-2, 2);
-    line = "\"" + objname + "\" : " + line + "}";
-    return line;
-}
-
+//Версия с JSON::Stringify
 void SnapshotDumpTest(const CmdLine& cmdline)
 {
     v8::StartupData blob;
@@ -961,9 +826,10 @@ void SnapshotDumpTest(const CmdLine& cmdline)
             const v8::HeapSnapshot* snapshot = heapprofiler->TakeHeapSnapshot();
             const v8::HeapGraphNode* node = snapshot->GetRoot()->GetChild(1)->GetToNode();
             GetProperties(isolate, node, symbols);
+
             //Получаем значения переменных по имени из контекста
-            std::vector<std::string> objdumps;
             std::string line = "";
+            std::unordered_map<std::string, std::string> objects;
             if (!symbols[v8::HeapGraphNode::kObject].empty())
             {
                 for (i = 0; i < symbols[v8::HeapGraphNode::kObject].size(); ++i)
@@ -973,19 +839,10 @@ void SnapshotDumpTest(const CmdLine& cmdline)
                                                     v8::NewStringType::kNormal).ToLocalChecked();
                     //Получаем значение из контекста не вложенной переменной
                     v8::Local<v8::Value> value = context->Global()->Get(context, objname).ToLocalChecked();
-                    if (value->IsArray())
-                    {
-                        v8::Local<v8::Array> arr = v8::Local<v8::Array>::Cast(value);
-                        line = DumpArrayType(context, arr, symbols[v8::HeapGraphNode::kObject][i]);
-                    }
-                    else
-                    {
-                        if (value->IsObject())
-                            line = DumpObjectType(context, value, symbols[v8::HeapGraphNode::kObject][i].c_str());
-                        else
-                            line = DumpSimpleType(context, value, symbols[v8::HeapGraphNode::kObject][i]);
-                    }
-                    objdumps.push_back(line);
+                    //Получаем json, соответствующий объекту
+                    v8::Local<v8::String> jsonvalue = v8::JSON::Stringify(context, value).ToLocalChecked();
+                    v8::String::Utf8Value obj(isolate, jsonvalue);
+                    objects[symbols[v8::HeapGraphNode::kObject][i]] = *obj;
                 }
             }
 
@@ -994,15 +851,19 @@ void SnapshotDumpTest(const CmdLine& cmdline)
             snapshot->Serialize(&s);
             s.WaitForEnd();
             std::string json = s.GetJson();
-
             //Собираем итоговый Json.
             std::string heapdump =
                         "{\n"
                             "\"vars\" : [";
-            for (i = 0; i < objdumps.size(); ++i)
-                heapdump += "{" + objdumps[i] + "},\n";
-            if (heapdump.size() > 2)
-                heapdump.erase(heapdump.size()-2, 2);
+
+            //Добавляем все переменные
+            for (auto it = objects.begin(); it != objects.end(); ++it)
+            {
+                if (it->second.compare("undefined") != 0)
+                    heapdump += "{\"" + it->first + "\":" + it->second + "},\n";
+            }
+            heapdump = heapdump.substr(0, heapdump.size()-2);
+            //Функции пока отсутствуют
             heapdump +=    "],\n"
                             "\"functions\" : [],\n"
                             "\"native\" : \n"
