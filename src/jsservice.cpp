@@ -537,7 +537,7 @@ std::string V8Service::Dump(const std::string& address, const std::string& snapn
                 }
 
                 //Собираем итоговый Json.
-                std::string heapdump =
+                heapdump =
                             "{\n"
                                 "\"vars\" : [";
                 //Добавляем все переменные
@@ -554,7 +554,6 @@ std::string V8Service::Dump(const std::string& address, const std::string& snapn
                     heapdump += "\"" + functions[i] + "\",\n";
                 heapdump = heapdump.substr(0, heapdump.size()-2);
                 heapdump +=     "]}";
-
             }
         }
         else
