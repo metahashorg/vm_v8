@@ -141,6 +141,7 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
     std::string js = "";
     //Получаем режим запроса из url
     mhd_resp.headers["Content-Type"] = "text/plain";
+    mhd_resp.headers["Access-Control-Allow-Origin"] = "*";
     std::string action = mhd_req.params["act"];
     if (!action.empty())
     {
