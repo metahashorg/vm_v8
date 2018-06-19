@@ -306,45 +306,20 @@ void SnapshotEnumerator::Reload(const char* directory)
     FindNewestSnapshots();
 }
 
+bool compareFunction (std::string a, std::string b) {return a<b;}
+
 void SnapshotEnumerator::FindNewestSnapshots()
 {
-    size_t j, k;
-    std::string snum = "";
     for (auto it = snapshotsnames.begin(); it != snapshotsnames.end(); ++it)
     {
-        int maxnum = 0;
-        size_t maxnumidx = 0;
         if (it->second.size() > 1)
         {
-            for (size_t i = 0; i < it->second.size(); ++i)
-            {
-                j = it->second[i].find('.', 0);
-                if (j != std::string::npos)
-                {
-                    k = it->second[i].find('.', j+1);
-                    if (k != std::string::npos)
-                    {
-                        snum = it->second[i].substr(j+1, k-j-1);
-                        try
-                        {
-                            int curnum = std::stoi(snum);
-                            if (curnum > maxnum)
-                            {
-                                maxnum = curnum;
-                                maxnumidx = i;
-                            }
-                        }
-                        catch(const std::exception& ex)
-                        {
-                        }
-                    }
-                }
-            }
+            std::sort(it->second.begin(), it->second.end(), compareFunction);
+            //Проверяем есть ли в списке снимок компиляции
+            if (it->second[it->second.size()-1].compare(it->second[it->second.size()-1].size()-9, 9, "cmpl.shot") == 0)
+                it->second.pop_back();
         }
-        //Устанавливаем максимальный элемент последним в массиве
-        std::string lm = it->second[it->second.size()-1];
-        it->second[it->second.size()-1] = it->second[maxnumidx];
-        it->second[maxnumidx] = lm;
+
     }
 }
 

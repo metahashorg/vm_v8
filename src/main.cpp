@@ -4,6 +4,7 @@
 #include <sstream>
 #include <iostream>
 #include <string>
+#include <algorithm>
 #include <unordered_map>
 #include <vector>
 #include <locale>
