@@ -152,8 +152,15 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
             js = mhd_req.post;
             if (!address.empty() && !js.empty())
             {
-                Compile(address, js);
-                mhd_resp.code = HTTP_OK_CODE;
+                std::string err = "";
+                mhd_resp.code = Compile(address, js, err) ? HTTP_OK_CODE : HTTP_BAD_REQUEST_CODE;
+                if (Compile(address, js, err))
+                    mhd_resp.code = HTTP_OK_CODE;
+                else
+                {
+                    mhd_resp.code = HTTP_BAD_REQUEST_CODE;
+                    mhd_resp.data = err;
+                }
             }
             else
             {
@@ -171,9 +178,21 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
                 js = mhd_req.post;
                 if (!address.empty() && !js.empty())
                 {
-                    response = Run(address, js);
-                    mhd_resp.data = response;
-                    mhd_resp.code = HTTP_OK_CODE;
+                    bool rslt = false;
+                    std::string err = "";
+                    response = Run(address, js, rslt, err);
+                    if (rslt)
+                    {
+                        mhd_resp.data = response;
+                        mhd_resp.code = HTTP_OK_CODE;
+                    }
+                    else
+                    {
+                        if (err.empty())
+                            err = "Internal service error";
+                        mhd_resp.code = HTTP_BAD_REQUEST_CODE;
+                        mhd_resp.data = err;
+                    }
                 }
                 else
                 {
@@ -247,14 +266,16 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
     }
 }
 
-void V8Service::Compile(const std::string& address, const std::string& code)
+bool V8Service::Compile(const std::string& address, const std::string& code, std::string& err)
 {
+    bool rslt = false;
+    err.clear();
     std::string addrdir = compileDirectory + "/" + address;
     const int direrr = mkdir(addrdir.c_str(), S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
     if (direrr < 0)
     {
         log_err("Error creating directory!n");
-        return;
+        return false;
     }
     std::string dbgfilepath = addrdir + "/" + address + ".dbgi";
     std::string btfilepath = addrdir + "/" + address + ".bc";
@@ -262,24 +283,28 @@ void V8Service::Compile(const std::string& address, const std::string& code)
     std::string errlogfilepath = addrdir + "/" + address + ".log";
     std::string snapshotfilepath = addrdir + "/" + address + ".cmpl.shot";
     std::string jsfilepath = addrdir + "/" + address + ".js";
-    std::ofstream dbgfile(dbgfilepath, std::ios::out | std::ios::app);
-    std::ofstream btfile(btfilepath, std::ios::out | std::ios::app);
-    std::ofstream cmplfile(cmplfilepath, std::ios::out | std::ios::app);
+
     std::ofstream errlogfile(errlogfilepath, std::ios::out | std::ios::app);
-    std::ofstream snapshotfile(snapshotfilepath, std::ios::out | std::ios::app);
-     std::ofstream jsfile(jsfilepath, std::ios::out | std::ios::app);
-    if (!dbgfile || !btfile || !cmplfile || !errlogfile || !snapshotfile || !jsfile)
+    std::ofstream jsfile(jsfilepath, std::ios::out | std::ios::app);
+    if (!errlogfile || !jsfile)
     {
         log_err("Open output files error.\n");
-        return;
+        return false;
     }
     jsfile << code;
+    jsfile.close();
+
     std::string debuglog = "";
     std::string cmpl = "";
     std::vector<uint8_t> snapshot;
-    std::string bytecode = GetBytecode(code.c_str(), cmpl, snapshot, errlogfile);
+    std::string bytecode = GetBytecode(code.c_str(), cmpl, snapshot, errlogfile, err);
     if (!bytecode.empty())
     {
+        std::ofstream dbgfile(dbgfilepath, std::ios::out | std::ios::app);
+        std::ofstream btfile(btfilepath, std::ios::out | std::ios::app);
+        std::ofstream cmplfile(cmplfilepath, std::ios::out | std::ios::app);
+        std::ofstream snapshotfile(snapshotfilepath, std::ios::out | std::ios::app);
+
         dbgfile << bytecode;
         btfile << BytecodeToListing(bytecode);
         if (!cmpl.empty())//Ошибок при создании компилированного кода тоже не было
@@ -288,19 +313,29 @@ void V8Service::Compile(const std::string& address, const std::string& code)
             cmplfile << cmpl;
             //Сохраняем файл снимка если он создан
             if (!snapshot.empty())
+            {
                 snapshotfile.write((const char*)snapshot.data(), snapshot.size());
+                rslt = true;
+            }
         }
+
+        dbgfile.close();
+        btfile.close();
+        cmplfile.close();
+        snapshotfile.close();
     }
-    dbgfile.close();
-    btfile.close();
-    cmplfile.close();
+    else
+    {
+        if (err.empty())//Ошибка не связанная с js-кодом
+            err = "Internal service error.";
+    }
     errlogfile.close();
-    snapshotfile.close();
-    jsfile.close();
+
+    return rslt;
 }
 
 std::string V8Service::GetBytecode(const char* jscode, std::string& cmpl,
-                                    std::vector<uint8_t>& snapshot, std::ofstream& errlog)
+                                    std::vector<uint8_t>& snapshot, std::ofstream& errlog, std::string& jserr)
 {
     StdCapture out;
     out.BeginCapture();
@@ -331,7 +366,8 @@ std::string V8Service::GetBytecode(const char* jscode, std::string& cmpl,
             if (!v8::Script::Compile(context, source).ToLocal(&script))
             {
                 v8::String::Utf8Value error(isolate, try_catch.Exception());
-                errlog << "Compile error(" << __FUNCTION__ << "):" << *error << std::endl;
+                jserr = "Compile error(" + std::string(__FUNCTION__) + "):" + *error;
+                errlog << jserr << std::endl;
                 return "";
             }
 
@@ -341,7 +377,8 @@ std::string V8Service::GetBytecode(const char* jscode, std::string& cmpl,
                 if (!val->IsTrue())
                 {
                     v8::String::Utf8Value error(isolate, try_catch.Exception());
-                    errlog << "Run error(" << __FUNCTION__ << "):" << *error << std::endl;
+                    jserr = "Run error(" + std::string(__FUNCTION__) + "):" + *error;
+                    errlog << jserr << std::endl;
                     return "";
                 }
             }
@@ -380,8 +417,10 @@ std::string V8Service::GetBytecode(const char* jscode, std::string& cmpl,
     return bytecode;
 }
 
-std::string V8Service::Run(const std::string& address, const std::string& code)
+std::string V8Service::Run(const std::string& address, const std::string& code, bool& rslt, std::string& err)
 {
+    rslt = false;
+    err.clear();
     std::string execresult = "";
     std::string snapshot = "";
     std::unordered_map<std::string, std::vector<std::string> >::iterator it;
@@ -430,7 +469,8 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
         if (!v8::Script::Compile(context, source).ToLocal(&script))
         {
             v8::String::Utf8Value error(isolate, try_catch.Exception());
-            g_errorlog << "Compile error(" << __FUNCTION__ << "):" << *error << std::endl;
+            err = "Compile error(" + std::string(__FUNCTION__) + "):" + *error;
+            g_errorlog << err << std::endl;
             return "";
         }
 
@@ -440,7 +480,8 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
             if (!val->IsTrue())
             {
                 v8::String::Utf8Value error(isolate, try_catch.Exception());
-                g_errorlog << "Run error(" << __FUNCTION__ << "):" << *error << std::endl;
+                err = "Run error(" + std::string(__FUNCTION__) + "):" + *error;
+                g_errorlog << err << std::endl;
                 return "";
             }
         }
@@ -467,12 +508,12 @@ std::string V8Service::Run(const std::string& address, const std::string& code)
     }
     cmdjs << code;
     cmdjs.close();
-    //Запрашиваем сборку мусора перед созданием снимка
     blob = creator->CreateBlob(v8::SnapshotCreator::FunctionCodeHandling::kClear);
     snapout.write(blob.data, blob.raw_size);
     snapout.close();
     if (creator)
         delete creator;
+    rslt = true;
     return execresult;
 }
 
