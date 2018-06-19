@@ -786,10 +786,57 @@ void SnapshotDumpTest(const CmdLine& cmdline)
         {
             v8::HandleScope handle_scope(isolate);
             v8::TryCatch try_catch(isolate);
-            v8::Local<v8::Context> context = v8::Context::New(isolate);
+            v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
+            v8::Local<v8::Context> context = v8::Context::New(isolate, NULL, global);
             v8::Context::Scope context_scope(context);
             creator->SetDefaultContext(context);
             v8::Local<v8::Value> result;
+            v8::Local<v8::Object> globalobj = context->Global();
+            //С целью правильной сериализации данных типа Map
+            //определяем функцию replacer
+            const char* replacersrc = "function replacer(name, val)\n"
+                                   "{\n"
+                                        "let ar = [];\n"
+                                        "if ( val instanceof Map )\n"
+                                        "{\n"
+                                            "val.forEach((x, s) => {\n"
+                                            "ar.push([s, x])\n"
+                                            "})\n"
+                                            "return ar;\n"
+                                        "}\n"
+                                        "else\n"
+                                        "{\n"
+                                            "return val;\n"
+                                        "}\n"
+                                    "};\n";
+
+            v8::Local<v8::String> replacer =
+            v8::String::NewFromUtf8(isolate,
+                                    replacersrc,
+                                    v8::NewStringType::kNormal).ToLocalChecked();
+            v8::Local<v8::Script> rplscript;
+            if (!v8::Script::Compile(context, replacer).ToLocal(&rplscript))
+            {
+                v8::String::Utf8Value error(isolate, try_catch.Exception());
+                g_errorlog << "Replacer compile error(" << __FUNCTION__ << "):" << *error << std::endl;
+                return;
+            }
+            //Определяем replacer в текущем контексте
+            if (!rplscript->Run(context).ToLocal(&result))
+            {
+                v8::Local<v8::Value> val = try_catch.Exception();
+                if (!val->IsTrue())
+                {
+                    v8::String::Utf8Value error(isolate, try_catch.Exception());
+                    g_errorlog << "Replacer run error(" << __FUNCTION__ << "):" << *error << std::endl;
+                    return;
+                }
+            }
+            else
+            {
+                v8::String::Utf8Value utf8(isolate, result);
+                g_errorlog << __FUNCTION__ << ":" << *utf8 << std::endl;
+            }
 
             //Перебираем переменные в куче.
             size_t i = 0;
@@ -818,9 +865,22 @@ void SnapshotDumpTest(const CmdLine& cmdline)
                     else
                     {
                         //Получаем json, соответствующий объекту
-                        v8::Local<v8::String> jsonvalue = v8::JSON::Stringify(context, value).ToLocalChecked();
-                        v8::String::Utf8Value obj(isolate, jsonvalue);
-                        variables[symbols[v8::HeapGraphNode::kObject][i]] = *obj;
+                        v8::Local<v8::Object> JSON = globalobj->Get(v8::String::NewFromUtf8(isolate, "JSON",
+                                                        v8::NewStringType::kNormal).ToLocalChecked())->ToObject();
+                        v8::Local<v8::Function> JSON_stringify = v8::Local<v8::Function>::Cast(JSON->Get(v8::String::NewFromUtf8(isolate, "stringify",
+                                                                v8::NewStringType::kNormal).ToLocalChecked()));
+                        v8::Local<v8::Value> args[] = {
+                                                        value,
+                                                        globalobj->Get(v8::String::NewFromUtf8(isolate, "replacer",
+                                                        v8::NewStringType::kNormal).ToLocalChecked())->ToObject()
+                                                       };
+
+                        v8::Local<v8::Value> jsonvalue = JSON_stringify->Call(JSON, 2, args);
+                        if (jsonvalue->IsString())
+                        {
+                            v8::String::Utf8Value obj(isolate, jsonvalue);
+                            variables[symbols[v8::HeapGraphNode::kObject][i]] = *obj;
+                        }
                     }
                 }
             }
