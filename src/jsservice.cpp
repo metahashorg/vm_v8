@@ -153,7 +153,6 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
             if (!address.empty() && !js.empty())
             {
                 std::string err = "";
-                mhd_resp.code = Compile(address, js, err) ? HTTP_OK_CODE : HTTP_BAD_REQUEST_CODE;
                 if (Compile(address, js, err))
                     mhd_resp.code = HTTP_OK_CODE;
                 else
