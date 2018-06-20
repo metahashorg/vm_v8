@@ -226,20 +226,15 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
                     address = mhd_req.params["a"];
                     std::string snapnum = mhd_req.params["state"];
                     mhd_resp.code = HTTP_BAD_REQUEST_CODE;
-                    pubkeyparam = mhd_req.params["pubk"];
-                    signatureparam = mhd_req.params["sign"];
 
-                    if (!address.empty() && !snapnum.empty() && !pubkeyparam.empty() && !signatureparam.empty())
+                    if (!address.empty() && !snapnum.empty())
                     {
                         response = Dump(address, snapnum);
                         mhd_resp.data = response;
                         mhd_resp.code = HTTP_OK_CODE;
                     }
                     else
-                    {
                         log_err("One of the parameters for the dump command is not specified.\n");
-                        mhd_resp.code = HTTP_BAD_REQUEST_CODE;
-                    }
                 }
                 else
                 {
