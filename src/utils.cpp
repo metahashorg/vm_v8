@@ -37,13 +37,28 @@ void HexStringToDump(const std::string& hexstr, std::vector<uint8_t>& dump)
     }
 }
 
-EVP_PKEY* ParseDER(unsigned char* binary, size_t binarysize)
+EVP_PKEY* ParsePubDER(unsigned char* binary, size_t binarysize)
 {
     EVP_PKEY* key = NULL;
     if (binary && binarysize != 0)
     {
         if (d2i_PUBKEY(&key, (const unsigned char**)&binary, binarysize))
             return key;
+    }
+    return NULL;
+}
+
+EVP_PKEY* ParsePrivDER(unsigned char* binary, size_t binarysize)
+{
+    EC_KEY* eckey = NULL;
+    EVP_PKEY* key = EVP_PKEY_new();
+    if (binary && binarysize != 0)
+    {
+        if (d2i_ECPrivateKey(&eckey, (const unsigned char**)&binary, binarysize))
+        {
+            EVP_PKEY_assign_EC_KEY(key, eckey);
+            return key;
+        }
     }
     return NULL;
 }
@@ -66,6 +81,23 @@ ECDSA_SIG* ECSignatureFromBuffer(unsigned char* buff, size_t bufsize, EVP_PKEY* 
         }
     }
     return signature;
+}
+
+void ECSignatureToBuffer(unsigned char** buff, size_t* bufsize, EVP_PKEY* key, ECDSA_SIG* signature)
+{
+    const BIGNUM* r = NULL;
+    const BIGNUM* s = NULL;
+    ECDSA_SIG_get0(signature, &r, &s);
+    int r_num = BN_num_bytes(r);
+    int s_num = BN_num_bytes(s);
+    unsigned int degree = EC_GROUP_get_degree(EC_KEY_get0_group(EVP_PKEY_get1_EC_KEY(key)));
+    unsigned int bn_len = (degree + 7) / 8;
+    unsigned int buf_len = bn_len * 2;
+    unsigned char* raw_buf = new unsigned char[buf_len];
+    BN_bn2bin(r, raw_buf + bn_len - r_num);
+    BN_bn2bin(s, raw_buf + buf_len - s_num);
+    *buff = raw_buf;
+    *bufsize = buf_len;
 }
 
 bool CheckBufferSignature(EVP_PKEY* publicKey, const unsigned char* buf, size_t bufsize, ECDSA_SIG* signature)
@@ -210,6 +242,87 @@ bool CreateECKeyPairAndAddr(std::string& privkey,
     return rslt;
 }
 
+bool SignBuffer(EVP_PKEY* privkey, const unsigned char* buf, size_t bufsize, ECDSA_SIG** signature)
+{
+    if (privkey && buf && bufsize != 0 && signature)
+    {
+        EVP_MD_CTX* mdctx;
+        unsigned char md_value[EVP_MAX_MD_SIZE];
+        unsigned int md_len;
+
+        *signature = NULL;
+        mdctx = EVP_MD_CTX_new();
+        EVP_DigestInit_ex(mdctx, EVP_sha256(), NULL);
+        EVP_DigestUpdate(mdctx, buf, bufsize);
+        EVP_DigestFinal_ex(mdctx, md_value, &md_len);
+        EVP_MD_CTX_free(mdctx);
+
+        ECDSA_SIG* sig = ECDSA_do_sign(md_value, md_len, EVP_PKEY_get1_EC_KEY(privkey));
+        if (sig)
+        {
+            *signature = sig;
+            return true;
+        }
+        else
+            return false;
+
+	}
+	else
+        return false;
+}
+
+//Функции создания и проверки подписи в стандартной для сервиса форме
+std::string SignData(const std::string& data, const std::string& hexprivkey)
+{
+    std::string signature = "";
+    if (!data.empty() && !hexprivkey.empty())
+    {
+        std::vector<uint8_t> privkey;
+        HexStringToDump(hexprivkey, privkey);
+        EVP_PKEY* pk = ParsePrivDER(privkey.data(), privkey.size());
+        if (pk)
+        {
+            ECDSA_SIG* sig = NULL;
+            if (SignBuffer(pk, (const unsigned char*)data.data(), data.size(), &sig))
+            {
+                unsigned char* sigdata = NULL;
+                size_t sigdatasize = 0;
+                ECSignatureToBuffer(&sigdata, &sigdatasize, pk, sig);
+                if (sigdata)
+                {
+                    signature = DumpToHexString((const uint8_t*)sigdata, (uint8_t)sigdatasize);
+                    delete[] sigdata;
+                }
+            }
+        }
+        EVP_PKEY_free(pk);
+    }
+    return signature;
+}
+
+bool CheckSign(const std::string& data, const std::string& signature, const std::string& pubkey)
+{
+    EVP_PKEY* pk = NULL;
+    ECDSA_SIG* sig = NULL;
+    bool rslt = false;
+    if (!data.empty() && !signature.empty() && !pubkey.empty())
+    {
+        std::vector<uint8_t> pubkeydump;
+        std::vector<uint8_t> signaturedump;
+        HexStringToDump(pubkey, pubkeydump);
+        HexStringToDump(signature, signaturedump);
+        pk = ParsePubDER(pubkeydump.data(), pubkey.size());
+        sig = ECSignatureFromBuffer(signaturedump.data(), signaturedump.size(), pk);
+        if (pk && sig)
+            rslt = CheckBufferSignature(pk, (const unsigned char*)data.data(), data.size(), sig);
+    }
+    if (pk)
+        EVP_PKEY_free(pk);
+    if (sig)
+        ECDSA_SIG_free(sig);
+    return rslt;
+}
+
 std::string ReadFile(const std::string& path)
 {
     std::ifstream input(path, std::ifstream::binary);
@@ -305,21 +418,54 @@ void SnapshotEnumerator::Reload(const char* directory)
     }
     FindNewestSnapshots();
 }
+bool compareFunction (std::string a, std::string b)
+{
+    size_t i,j;
+    std::string anum;
+    std::string bnum;
+    i = a.find('.');
+    if (i != std::string::npos)
+    {
+        j = a.find('.', i+1);
+        anum = a.substr(i+1, j-1-i);
 
-bool compareFunction (std::string a, std::string b) {return a<b;}
+        if (!anum.empty())
+        {
+            i = b.find('.');
+            if (i != std::string::npos)
+            {
+                j = b.find('.', i+1);
+                bnum = b.substr(i+1, j-1-i);
+                if (!bnum.empty())
+                {
+                    if (anum.compare("cmpl") == 0)
+                        return true;
+                    else
+                    {
+                        if (bnum.compare("cmpl") == 0)
+                            return false;
+                        else
+                        {
+                            int an = std::stoi(anum);
+                            int bn = std::stoi(bnum);
+                            return (an < bn);
+                        }
+
+                    }
+                }
+            }
+        }
+    }
+    return true;
+}
+
 
 void SnapshotEnumerator::FindNewestSnapshots()
 {
     for (auto it = snapshotsnames.begin(); it != snapshotsnames.end(); ++it)
     {
         if (it->second.size() > 1)
-        {
             std::sort(it->second.begin(), it->second.end(), compareFunction);
-            //Проверяем есть ли в списке снимок компиляции
-            if (it->second[it->second.size()-1].compare(it->second[it->second.size()-1].size()-9, 9, "cmpl.shot") == 0)
-                it->second.pop_back();
-        }
-
     }
 }
 

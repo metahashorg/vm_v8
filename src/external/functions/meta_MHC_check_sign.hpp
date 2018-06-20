@@ -49,7 +49,7 @@ void check_sign(const v8::FunctionCallbackInfo<v8::Value>& args)
         HexStringToDump(hex_sign, sign);
 
         //Обрабатываем ключ
-        EVP_PKEY* pk = ParseDER(pubkey.data(), pubkey.size());
+        EVP_PKEY* pk = ParsePubDER(pubkey.data(), pubkey.size());
         if (pk)
         {
             //Восстанавливаем сигнатуру

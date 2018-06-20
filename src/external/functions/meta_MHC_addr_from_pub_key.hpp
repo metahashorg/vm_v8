@@ -29,7 +29,7 @@ void address_from_pubkey(const v8::FunctionCallbackInfo<v8::Value>& args)
         HexStringToDump(hex_pubkey, pubkey);
 
         //Обрабатываем ключ
-        EVP_PKEY* pk = ParseDER(pubkey.data(), pubkey.size());
+        EVP_PKEY* pk = ParsePubDER(pubkey.data(), pubkey.size());
         if (pk)
         {
             char address[ADDRESS_LENGTH] = {0};

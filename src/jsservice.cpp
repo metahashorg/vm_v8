@@ -139,6 +139,8 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
 {
     std::string address = "";
     std::string js = "";
+    std::string pubkeyparam = "";
+    std::string signatureparam = "";
     //Получаем режим запроса из url
     mhd_resp.headers["Content-Type"] = "text/plain";
     mhd_resp.headers["Access-Control-Allow-Origin"] = "*";
@@ -150,16 +152,24 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
         {
             address = mhd_req.params["a"];
             js = mhd_req.post;
-            if (!address.empty() && !js.empty())
+            mhd_resp.code = HTTP_BAD_REQUEST_CODE;
+            //Проверка подписи
+            pubkeyparam = mhd_req.params["pubk"];
+            signatureparam = mhd_req.params["sign"];
+            if (!address.empty() && !js.empty() && !pubkeyparam.empty() && !signatureparam.empty())
             {
-                std::string err = "";
-                if (Compile(address, js, err))
-                    mhd_resp.code = HTTP_OK_CODE;
-                else
+                if (CheckSign(mhd_req.post, signatureparam, pubkeyparam))
                 {
-                    mhd_resp.code = HTTP_BAD_REQUEST_CODE;
-                    mhd_resp.data = err;
+                    std::string err = "";
+                    if (Compile(address, js, err))
+                        mhd_resp.code = HTTP_OK_CODE;
+                    else
+                    {
+                        mhd_resp.data = err;
+                    }
                 }
+                else
+                    mhd_resp.data = "Signature verification failed.";
             }
             else
             {
@@ -175,23 +185,32 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
                 std::string response = "";
                 address = mhd_req.params["a"];
                 js = mhd_req.post;
-                if (!address.empty() && !js.empty())
+                mhd_resp.code = HTTP_BAD_REQUEST_CODE;
+                pubkeyparam = mhd_req.params["pubk"];
+                signatureparam = mhd_req.params["sign"];
+
+                if (!address.empty() && !js.empty() && !pubkeyparam.empty() && !signatureparam.empty())
                 {
-                    bool rslt = false;
-                    std::string err = "";
-                    response = Run(address, js, rslt, err);
-                    if (rslt)
+                    if (CheckSign(mhd_req.post, signatureparam, pubkeyparam))
                     {
-                        mhd_resp.data = response;
-                        mhd_resp.code = HTTP_OK_CODE;
+                        bool rslt = false;
+                        std::string err = "";
+                        response = Run(address, js, rslt, err);
+                        if (rslt)
+                        {
+                            mhd_resp.data = response;
+                            mhd_resp.code = HTTP_OK_CODE;
+                        }
+                        else
+                        {
+                            if (err.empty())
+                                err = "Internal service error";
+                            mhd_resp.code = HTTP_BAD_REQUEST_CODE;
+                            mhd_resp.data = err;
+                        }
                     }
                     else
-                    {
-                        if (err.empty())
-                            err = "Internal service error";
-                        mhd_resp.code = HTTP_BAD_REQUEST_CODE;
-                        mhd_resp.data = err;
-                    }
+                         mhd_resp.data = "Signature verification failed.";
                 }
                 else
                 {
@@ -206,7 +225,11 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
                     std::string response = "";
                     address = mhd_req.params["a"];
                     std::string snapnum = mhd_req.params["state"];
-                    if (!address.empty() && !snapnum.empty())
+                    mhd_resp.code = HTTP_BAD_REQUEST_CODE;
+                    pubkeyparam = mhd_req.params["pubk"];
+                    signatureparam = mhd_req.params["sign"];
+
+                    if (!address.empty() && !snapnum.empty() && !pubkeyparam.empty() && !signatureparam.empty())
                     {
                         response = Dump(address, snapnum);
                         mhd_resp.data = response;
@@ -249,9 +272,45 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
                     }
                     else
                     {
-                        //Режим не существует
-                        log_err("Command %s not found.\n", action.c_str());
-                        mhd_resp.code = HTTP_BAD_REQUEST_CODE;
+                        if (action.compare("mh_sign") == 0)
+                        {
+                            mhd_resp.code = HTTP_BAD_REQUEST_CODE;
+                            address = mhd_req.params["a"];
+                            if (!address.empty())
+                            {
+                                //Ищем соответствущий адресу ключ
+                                std::string keydir = keysDirectory + "/" + address;
+                                std::string privkeypath = keydir + "/" + address + ".priv.der";
+                                std::string pubkeypath = keydir + "/" + address + ".pub.der";
+                                std::string privkeyhex = ReadFile(privkeypath);
+                                std::string pubkeyhex = ReadFile(pubkeypath);
+                                if (!privkeyhex.empty() && !pubkeyhex.empty())
+                                {
+                                    std::string signature = SignData(mhd_req.post, privkeyhex);
+                                    if (!signature.empty())
+                                    {
+                                        std::string response = "{\n"
+                                                                    "\"pubkey\":\"" + pubkeyhex + "\",\n"
+                                                                    "\"signature\":\"" + signature + "\"\n"
+                                                                "}\n";
+                                        mhd_resp.data = response;
+                                        mhd_resp.code = HTTP_OK_CODE;
+                                    }
+                                    else
+                                        log_err("Data signing error");
+                                }
+                                else
+                                    log_err("Private key file not found or empty.");
+                            }
+                            else
+                                log_err("Address parameter not found.\n");
+                        }
+                        else
+                        {
+                            //Режим не существует
+                            log_err("Command %s not found.\n", action.c_str());
+                            mhd_resp.code = HTTP_BAD_REQUEST_CODE;
+                        }
                     }
                 }
             }
@@ -488,6 +547,7 @@ std::string V8Service::Run(const std::string& address, const std::string& code, 
         {
             v8::String::Utf8Value utf8(isolate, result);
             execresult = *utf8;
+            g_errorlog << "result: " << execresult << std::endl;
         }
     }
     out.EndCapture();

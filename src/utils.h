@@ -26,7 +26,7 @@
 std::string DumpToHexString(const std::string& dump);
 std::string DumpToHexString(const uint8_t* dump, uint32_t dumpsize);
 void HexStringToDump(const std::string& hexstr, std::vector<uint8_t>& dump);
-EVP_PKEY* ParseDER(unsigned char* binary, size_t binarysize);
+EVP_PKEY* ParsePubDER(unsigned char* binary, size_t binarysize);
 ECDSA_SIG* ECSignatureFromBuffer(unsigned char* buff, size_t bufsize, EVP_PKEY* key);
 bool CheckBufferSignature(EVP_PKEY* publicKey, const unsigned char* buf,
                             size_t bufsize, ECDSA_SIG* signature);
@@ -63,4 +63,7 @@ const v8::HeapGraphNode* GetProperty(v8::Isolate* isolate,
                                             const v8::HeapGraphNode* node,
                                             v8::HeapGraphEdge::Type type,
                                             const char* name);
+std::string SignData(const std::string& data, const std::string& hexprivkey);
+bool CheckSign(const std::string& data, const std::string& signature, const std::string& pubkey);
+
 #endif
