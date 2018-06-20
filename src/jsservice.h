@@ -41,4 +41,5 @@ private:
 };
 
 void RunV8Service(const char* configpath);
+
 #endif

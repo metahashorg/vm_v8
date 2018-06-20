@@ -479,8 +479,8 @@ std::string V8Service::Run(const std::string& address, const std::string& code, 
     std::unordered_map<std::string, std::vector<std::string> >::iterator it;
     se->Reload((compileDirectory + "/" + address).c_str());
     it = se->snapshotsnames.find(address);
-    StdCapture out;
-    out.BeginCapture();
+    //StdCapture out;
+    //out.BeginCapture();
     v8::StartupData blob;
     //Проверяем есть ли входной снимок
     v8::SnapshotCreator* creator = NULL;
@@ -545,7 +545,7 @@ std::string V8Service::Run(const std::string& address, const std::string& code, 
             g_errorlog << "result: " << execresult << std::endl;
         }
     }
-    out.EndCapture();
+    //out.EndCapture();
     //Определяем номер последнего снимка
     std::string nextsnapnum = GetNextSnapNumber(it->second[it->second.size()-1]);
     //Если все прошло удачно, то выгружаем итоговый снимок.
