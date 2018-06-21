@@ -57,7 +57,7 @@ bool V8Service::init()
     }
     catch (std::exception& e)
     {
-        log_err("Catch exception while init LocalStore: %s\n", e.what());
+        g_errorlog << "Catch exception while init LocalStore:" << e.what() << std::endl;
         return false;
     }
     return true;
@@ -76,12 +76,12 @@ bool V8Service::ReadConfig()
     }
     catch(const libconfig::FileIOException &fioex)
     {
-        log_err("Config not found.\n");
+        g_errorlog << "Config not found." << std::endl;
         return false;
     }
     catch(libconfig::ParseException &pex)
     {
-        log_err("Config parse error at %d - %s.\n", pex.getLine(), pex.getError());
+        g_errorlog << "Config parse error at " << pex.getLine() << ":" << pex.getError() << std::endl;
         return false;
     }
 
@@ -93,18 +93,18 @@ bool V8Service::ReadConfig()
             set_port(port);
         else
         {
-            log_err("Port not found.\n");
+            g_errorlog << "Port not found" << std::endl;
             return false;
         }
         if (!settings.lookupValue("compiledirectory", compileDirectory))
         {
-            log_err("compiledirectory not found.\n");
+            g_errorlog << "compiledirectory not found." << std::endl;
             return false;
         }
         //Проверяем существование директории compileDirectory
         if (!IsDirectoryExist(compileDirectory.c_str()))
         {
-            log_err("Invalid compiledirectory parameter.\n");
+            g_errorlog << "Invalid compiledirectory parameter." << std::endl;
             return false;
         }
         else
@@ -113,12 +113,12 @@ bool V8Service::ReadConfig()
         }
         if (!settings.lookupValue("keysdirectory", keysDirectory))
         {
-            log_err("keysdirectory not found.\n");
+            g_errorlog << "keysdirectory not found." << std::endl;
             return false;
         }
         if (!IsDirectoryExist(keysDirectory.c_str()))
         {
-            log_err("Invalid keysdirectory parameter.\n");
+            g_errorlog << "Invalid keysdirectory parameter" << std::endl;
             return false;
         }
         //Сервис всегда однопоточный
@@ -127,11 +127,11 @@ bool V8Service::ReadConfig()
     }
     catch (const libconfig::SettingNotFoundException& e)
     {
-        log_err("Setting does not found: %s\n", e.getPath());
+        g_errorlog << "Setting does not found: " << e.getPath() << std::endl;
     }
     catch (std::exception& e)
     {
-        log_err("Unknown exception in %s: %s\n", __FUNCTION__, e.what());
+        g_errorlog << "Unknown exception in " << __FUNCTION__ << ":" << e.what() << std::endl;
     }
 
     return false;
@@ -164,7 +164,9 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
                 {
                     std::string err = "";
                     if (Compile(address, js, err))
+                    {
                         mhd_resp.code = HTTP_OK_CODE;
+                    }
                     else
                     {
                         mhd_resp.data = err;
@@ -175,7 +177,7 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
             }
             else
             {
-                log_err("One of the parameters for the compilation command is not specified.\n");
+                g_errorlog << "One of the parameters for the compilation command is not specified" << std::endl;
                 mhd_resp.code = HTTP_BAD_REQUEST_CODE;
             }
         }
@@ -222,13 +224,13 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
                         else
                         {
                             mhd_resp.data = "One of the parameters for the run command is not specified.";
-                            log_err(mhd_resp.data.c_str());
+                            g_errorlog << mhd_resp.data << std::endl;
                         }
                     }
                     else
                     {
                         mhd_resp.data = "Invalid netbyte value";
-                        log_err(mhd_resp.data.c_str());
+                        g_errorlog << mhd_resp.data << std::endl;
                     }
                 }
                 catch(const std::exception& ex)
@@ -253,7 +255,7 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
                         mhd_resp.code = HTTP_OK_CODE;
                     }
                     else
-                        log_err("One of the parameters for the dump command is not specified.\n");
+                        g_errorlog << "One of the parameters for the dump command is not specified." << std::endl;
                 }
                 else
                 {
@@ -274,14 +276,14 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
                                     mhd_resp.code = HTTP_OK_CODE;
                                 }
                                 else
-                                    log_err("Create address error.\n");
+                                    g_errorlog << "Create address error." << std::endl;
                             }
                             else
-                                log_err("Invalid byte value.\n");
+                                g_errorlog << "Invalid byte value." << std::endl;
                         }
                         catch (std::exception& ex)
                         {
-                            log_err("Invalid byte value.\n");
+                            g_errorlog << "Invalid byte value." << std::endl;
                         }
                     }
                     else
@@ -311,18 +313,18 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
                                         mhd_resp.code = HTTP_OK_CODE;
                                     }
                                     else
-                                        log_err("Data signing error");
+                                        g_errorlog << "Data signing error" << std::endl;
                                 }
                                 else
-                                    log_err("Private key file not found or empty.");
+                                    g_errorlog << "Private key file not found or empty." << std::endl;
                             }
                             else
-                                log_err("Address parameter not found.\n");
+                                g_errorlog << "Address parameter not found." << std::endl;
                         }
                         else
                         {
                             //Режим не существует
-                            log_err("Command %s not found.\n", action.c_str());
+                            g_errorlog << "Command " << action <<  " not found." << std::endl;
                             mhd_resp.code = HTTP_BAD_REQUEST_CODE;
                         }
                     }
@@ -333,7 +335,7 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
     else
     {
         //Режим использования не указан
-        log_err("Command not specified.\n");
+        g_errorlog << "Command not specified." << std::endl;
         mhd_resp.code = HTTP_BAD_REQUEST_CODE;
     }
 }
@@ -426,7 +428,6 @@ std::string V8Service::GetBytecode(const std::string& address, const char* jscod
             v8::HandleScope handle_scope(isolate);
             v8::TryCatch try_catch(isolate);
             v8::Local<v8::Context> context = v8::Context::New(isolate);
-            context_.Reset(isolate, context);
             v8::Context::Scope context_scope(context);
             //В случае компиляции msg.sender совпадает со значенением адреса отправителя
             msg.from = address;
@@ -543,7 +544,6 @@ std::string V8Service::Run(const std::string& address, const std::string& code, 
         v8::HandleScope handle_scope(isolate);
         v8::TryCatch try_catch(isolate);
         v8::Local<v8::Context> context = v8::Context::New(isolate);
-        context_.Reset(isolate, context);
         v8::Context::Scope context_scope(context);
         if (!InstallObject(&msg, isolate))
         {
@@ -633,7 +633,6 @@ std::string V8Service::Dump(const std::string& address, const std::string& snapn
             v8::TryCatch try_catch(isolate);
             v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
             v8::Local<v8::Context> context = v8::Context::New(isolate, NULL, global);
-            context_.Reset(isolate, context);
             v8::Context::Scope context_scope(context);
             if (!InstallObject(&msg, isolate))
             {
@@ -808,7 +807,7 @@ bool V8Service::InstallObject(Message* opts, v8::Isolate* isolate)
     v8::TryCatch try_catch(isolate);
     v8::Local<v8::Object> opts_obj = WrapObject(opts, isolate);
     v8::Local<v8::Context> context =
-    v8::Local<v8::Context>::New(isolate, context_);
+    v8::Local<v8::Context>::New(isolate, isolate->GetCurrentContext());
     context->Global()->Set(context,
                             v8::String::NewFromUtf8(isolate, "msgData", v8::NewStringType::kNormal).ToLocalChecked(), opts_obj).FromJust();
     return true;
@@ -818,12 +817,8 @@ v8::Local<v8::Object> V8Service::WrapObject(Message* obj, v8::Isolate* isolate)
 {
     v8::EscapableHandleScope handle_scope(isolate);
     v8::TryCatch try_catch(isolate);
-    if (global_template_.IsEmpty())
-    {
-        v8::Local<v8::ObjectTemplate> raw_template = MakeObjectTemplate(isolate);
-        global_template_.Reset(isolate, raw_template);
-    }
-    v8::Local<v8::ObjectTemplate> templ = v8::Local<v8::ObjectTemplate>::New(isolate, global_template_);
+    v8::Local<v8::ObjectTemplate> raw_template = MakeObjectTemplate(isolate);
+    v8::Local<v8::ObjectTemplate> templ = v8::Local<v8::ObjectTemplate>::New(isolate, raw_template);
     v8::Local<v8::Object> result = templ->NewInstance(isolate->GetCurrentContext()).ToLocalChecked();
     v8::Local<v8::External> obj_ptr = v8::External::New(isolate, obj);
     result->SetInternalField(0, obj_ptr);

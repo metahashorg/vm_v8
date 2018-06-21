@@ -396,9 +396,6 @@ void ShowMemoryUsage(const std::string& code)
 }
 
 //Тест внешней функции и переменной
-v8::Global<v8::Context> context_;
-v8::Global<v8::ObjectTemplate> global_template_;
-
 v8::Local<v8::ObjectTemplate> MakeObjectTemplate(v8::Isolate* isolate)
 {
     v8::EscapableHandleScope handle_scope(isolate);
@@ -413,12 +410,8 @@ v8::Local<v8::Object> WrapObject(v8::Isolate* isolate_, Data* obj)
 {
     v8::EscapableHandleScope handle_scope(isolate_);
     v8::TryCatch try_catch(isolate_);
-    if (global_template_.IsEmpty())
-    {
-        v8::Local<v8::ObjectTemplate> raw_template = MakeObjectTemplate(isolate_);
-        global_template_.Reset(isolate_, raw_template);
-    }
-    v8::Local<v8::ObjectTemplate> templ = v8::Local<v8::ObjectTemplate>::New(isolate_, global_template_);
+    v8::Local<v8::ObjectTemplate> raw_template = MakeObjectTemplate(isolate_);
+    v8::Local<v8::ObjectTemplate> templ = v8::Local<v8::ObjectTemplate>::New(isolate_, raw_template);
     v8::Local<v8::Object> result = templ->NewInstance(isolate_->GetCurrentContext()).ToLocalChecked();
     v8::Local<v8::External> obj_ptr = v8::External::New(isolate_, obj);
     result->SetInternalField(0, obj_ptr);
@@ -431,7 +424,7 @@ void InstallObjects(v8::Isolate* isolate_, Data* data)
     v8::TryCatch try_catch(isolate_);
     v8::Local<v8::Object> opts_obj = WrapObject(isolate_, data);
     v8::Local<v8::Context> context =
-    v8::Local<v8::Context>::New(isolate_, context_);
+    v8::Local<v8::Context>::New(isolate_, isolate_->GetCurrentContext());
     context->Global()->Set(context,
                             v8::String::NewFromUtf8(isolate_, "Data", v8::NewStringType::kNormal).ToLocalChecked(), opts_obj).FromJust();
 }
@@ -453,7 +446,6 @@ void ExternalTest(const std::string& code)
         AddPrint(&global, isolate);
         v8::Local<v8::Context> context = v8::Context::New(isolate, NULL, global);
         v8::Context::Scope context_scope(context);
-        context_.Reset(isolate, context);
         //Устанавливаем объект типа Data как внешнюю переменную
         InstallObjects(isolate, &data);
         v8::Local<v8::String> source =

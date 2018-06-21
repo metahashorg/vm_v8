@@ -60,8 +60,6 @@ private:
     std::string compileDirectory;
     std::string keysDirectory;
     SnapshotEnumerator* se;
-    v8::Global<v8::Context> context_;
-    v8::Global<v8::ObjectTemplate> global_template_;
     Message msg;
 };
 
