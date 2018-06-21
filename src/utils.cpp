@@ -256,7 +256,7 @@ std::string HexPubkeyToAddress(const std::string& hexpubkey, uint8_t firstbyte)
             uint8_t out[25];
             if (MhcPubkeyToAddress(pubkeydump.data() + (pubkeydump.size() - 65), 65, out, 25, firstbyte))
             {
-                address = DumpToHexString(out, 25);
+                address = "0x" + DumpToHexString(out, 25);
             }
         }
     }
