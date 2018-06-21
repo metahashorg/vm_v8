@@ -537,7 +537,7 @@ std::string V8Service::Run(const std::string& address, const std::string& code, 
         msg.from = address;
     else
     {
-
+        msg.from = HexPubkeyToAddress(pubkey, firstbyte);
     }
     //Запуск isolate
     {
