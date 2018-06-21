@@ -911,6 +911,10 @@ void SnapshotDumpTest(const CmdLine& cmdline)
 
 int main(int argc, char* argv[])
 {
+    std::string hexpubkey = "3059301306072a8648ce3d020106082a8648ce3d03010703420004da3b38c323f831840c6a75071fc44b17b8138119fc4111b9db590840c8459d0a5508ebea3a650e99262dd5e6d94b92d98a3c9d27bd264455776c1bffefae2430";
+    std::string addr = HexPubkeyToAddress(hexpubkey, 0x4);
+    printf("addr = %s\n", addr.c_str());
+    return 0;
     g_errorlog.open ("err.log", std::ofstream::out | std::ofstream::app);
     if (!g_errorlog)
     {

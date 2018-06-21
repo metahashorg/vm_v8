@@ -242,6 +242,27 @@ bool CreateECKeyPairAndAddr(std::string& privkey,
     return rslt;
 }
 
+std::string HexPubkeyToAddress(const std::string& hexpubkey, uint8_t firstbyte)
+{
+    std::string address = "";
+    if (!hexpubkey.empty())
+    {
+        std::vector<uint8_t> pubkeydump;
+        HexStringToDump(hexpubkey, pubkeydump);
+
+        if (pubkeydump.size() >= 65)
+        {
+            pubkeydump[pubkeydump.size() - 65] = firstbyte;
+            uint8_t out[25];
+            if (MhcPubkeyToAddress(pubkeydump.data() + (pubkeydump.size() - 65), 65, out, 25, firstbyte))
+            {
+                address = DumpToHexString(out, 25);
+            }
+        }
+    }
+    return address;
+}
+
 bool SignBuffer(EVP_PKEY* privkey, const unsigned char* buf, size_t bufsize, ECDSA_SIG** signature)
 {
     if (privkey && buf && bufsize != 0 && signature)

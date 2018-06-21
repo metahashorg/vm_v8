@@ -12,6 +12,8 @@
 
 #include "utils.h"
 #include "stdcapture.hpp"
+#include "external/variables/msgDataFrom.hpp"
+#include "external/variables/msgDataValue.hpp"
 
 extern intptr_t original_external_references[];
 extern std::ofstream g_errorlog;
@@ -188,34 +190,51 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
                 mhd_resp.code = HTTP_BAD_REQUEST_CODE;
                 pubkeyparam = mhd_req.params["pubk"];
                 signatureparam = mhd_req.params["sign"];
-
-                if (!address.empty() && !js.empty() && !pubkeyparam.empty() && !signatureparam.empty())
+                std::string firstbyte = mhd_req.params["byte"];//В шестнадцатеричной форме
+                try
                 {
-                    if (CheckSign(mhd_req.post, signatureparam, pubkeyparam))
+                    int byteint = std::stoi(firstbyte, 0, 16);
+                    if (byteint >= 0 && byteint < 256)
                     {
-                        bool rslt = false;
-                        std::string err = "";
-                        response = Run(address, js, rslt, err);
-                        if (rslt)
+
+                        if (!address.empty() && !js.empty() && !pubkeyparam.empty() && !signatureparam.empty())
                         {
-                            mhd_resp.data = response;
-                            mhd_resp.code = HTTP_OK_CODE;
+                            if (CheckSign(mhd_req.post, signatureparam, pubkeyparam))
+                            {
+                                bool rslt = false;
+                                std::string err = "";
+                                response = Run(address, js, pubkeyparam, rslt, err, 0x4);
+                                if (rslt)
+                                {
+                                    mhd_resp.data = response;
+                                    mhd_resp.code = HTTP_OK_CODE;
+                                }
+                                else
+                                {
+                                    if (err.empty())
+                                        err = "Internal service error";
+                                    mhd_resp.data = err;
+                                }
+                            }
+                            else
+                                mhd_resp.data = "Signature verification failed.";
                         }
                         else
                         {
-                            if (err.empty())
-                                err = "Internal service error";
-                            mhd_resp.code = HTTP_BAD_REQUEST_CODE;
-                            mhd_resp.data = err;
+                            mhd_resp.data = "One of the parameters for the run command is not specified.";
+                            log_err(mhd_resp.data.c_str());
                         }
                     }
                     else
-                         mhd_resp.data = "Signature verification failed.";
+                    {
+                        mhd_resp.data = "Invalid netbyte value";
+                        log_err(mhd_resp.data.c_str());
+                    }
                 }
-                else
+                catch(const std::exception& ex)
                 {
-                    log_err("One of the parameters for the run command is not specified.\n");
-                    mhd_resp.code = HTTP_BAD_REQUEST_CODE;
+                    mhd_resp.data = "Invalid netbyte value";
+                    log_err(mhd_resp.data.c_str());
                 }
             }
             else
@@ -350,7 +369,7 @@ bool V8Service::Compile(const std::string& address, const std::string& code, std
     std::string debuglog = "";
     std::string cmpl = "";
     std::vector<uint8_t> snapshot;
-    std::string bytecode = GetBytecode(code.c_str(), cmpl, snapshot, errlogfile, err);
+    std::string bytecode = GetBytecode(address, code.c_str(), cmpl, snapshot, errlogfile, err);
     if (!bytecode.empty())
     {
         std::ofstream dbgfile(dbgfilepath, std::ios::out | std::ios::app);
@@ -387,7 +406,7 @@ bool V8Service::Compile(const std::string& address, const std::string& code, std
     return rslt;
 }
 
-std::string V8Service::GetBytecode(const char* jscode, std::string& cmpl,
+std::string V8Service::GetBytecode(const std::string& address, const char* jscode, std::string& cmpl,
                                     std::vector<uint8_t>& snapshot, std::ofstream& errlog, std::string& jserr)
 {
     StdCapture out;
@@ -407,7 +426,15 @@ std::string V8Service::GetBytecode(const char* jscode, std::string& cmpl,
             v8::HandleScope handle_scope(isolate);
             v8::TryCatch try_catch(isolate);
             v8::Local<v8::Context> context = v8::Context::New(isolate);
+            context_.Reset(isolate, context);
             v8::Context::Scope context_scope(context);
+            //В случае компиляции msg.sender совпадает со значенением адреса отправителя
+            msg.from = address;
+            if (!InstallObject(&msg, isolate))
+            {
+                g_errorlog << __FUNCTION__ << " : Can not create external variables" << std::endl;
+                return "";
+            }
             creator->SetDefaultContext(context);
             v8::Local<v8::Value> result;
 
@@ -470,7 +497,8 @@ std::string V8Service::GetBytecode(const char* jscode, std::string& cmpl,
     return bytecode;
 }
 
-std::string V8Service::Run(const std::string& address, const std::string& code, bool& rslt, std::string& err)
+std::string V8Service::Run(const std::string& address, const std::string& code, const std::string& pubkey,
+                            bool& rslt, std::string& err, uint8_t firstbyte)
 {
     rslt = false;
     err.clear();
@@ -479,8 +507,6 @@ std::string V8Service::Run(const std::string& address, const std::string& code, 
     std::unordered_map<std::string, std::vector<std::string> >::iterator it;
     se->Reload((compileDirectory + "/" + address).c_str());
     it = se->snapshotsnames.find(address);
-    //StdCapture out;
-    //out.BeginCapture();
     v8::StartupData blob;
     //Проверяем есть ли входной снимок
     v8::SnapshotCreator* creator = NULL;
@@ -504,12 +530,26 @@ std::string V8Service::Run(const std::string& address, const std::string& code, 
         creator = new v8::SnapshotCreator(original_external_references);
         isolate = creator->GetIsolate();
     }
+    //Определяем номер последнего снимка
+    std::string nextsnapnum = GetNextSnapNumber(it->second[it->second.size()-1]);
+    if (nextsnapnum.compare("0") == 0)//Это инициализирующий запуск
+        msg.from = address;
+    else
+    {
+
+    }
     //Запуск isolate
     {
         v8::HandleScope handle_scope(isolate);
         v8::TryCatch try_catch(isolate);
         v8::Local<v8::Context> context = v8::Context::New(isolate);
+        context_.Reset(isolate, context);
         v8::Context::Scope context_scope(context);
+        if (!InstallObject(&msg, isolate))
+        {
+            g_errorlog << __FUNCTION__ << " : Can not create external variables" << std::endl;
+            return "";
+        }
         creator->SetDefaultContext(context);
         v8::Local<v8::Value> result;
 
@@ -545,9 +585,7 @@ std::string V8Service::Run(const std::string& address, const std::string& code, 
             g_errorlog << "result: " << execresult << std::endl;
         }
     }
-    //out.EndCapture();
-    //Определяем номер последнего снимка
-    std::string nextsnapnum = GetNextSnapNumber(it->second[it->second.size()-1]);
+
     //Если все прошло удачно, то выгружаем итоговый снимок.
     std::string newsnapsotpath = compileDirectory + "/" + address + "/" + address + "." +
                                  nextsnapnum + ".shot";
@@ -595,7 +633,13 @@ std::string V8Service::Dump(const std::string& address, const std::string& snapn
             v8::TryCatch try_catch(isolate);
             v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
             v8::Local<v8::Context> context = v8::Context::New(isolate, NULL, global);
+            context_.Reset(isolate, context);
             v8::Context::Scope context_scope(context);
+            if (!InstallObject(&msg, isolate))
+            {
+                g_errorlog << __FUNCTION__ << " : Can not create external variables" << std::endl;
+                return "";
+            }
             creator->SetDefaultContext(context);
             v8::Local<v8::Value> result;
             v8::Local<v8::Object> globalobj = context->Global();
@@ -756,6 +800,57 @@ std::string V8Service::CreateAddress(uint8_t firstbyte)
     else
         return "";
 }
+
+//Внешние переменные
+bool V8Service::InstallObject(Message* opts, v8::Isolate* isolate)
+{
+    v8::HandleScope handle_scope(isolate);
+    v8::TryCatch try_catch(isolate);
+    v8::Local<v8::Object> opts_obj = WrapObject(opts, isolate);
+    v8::Local<v8::Context> context =
+    v8::Local<v8::Context>::New(isolate, context_);
+    context->Global()->Set(context,
+                            v8::String::NewFromUtf8(isolate, "msgData", v8::NewStringType::kNormal).ToLocalChecked(), opts_obj).FromJust();
+    return true;
+}
+
+v8::Local<v8::Object> V8Service::WrapObject(Message* obj, v8::Isolate* isolate)
+{
+    v8::EscapableHandleScope handle_scope(isolate);
+    v8::TryCatch try_catch(isolate);
+    if (global_template_.IsEmpty())
+    {
+        v8::Local<v8::ObjectTemplate> raw_template = MakeObjectTemplate(isolate);
+        global_template_.Reset(isolate, raw_template);
+    }
+    v8::Local<v8::ObjectTemplate> templ = v8::Local<v8::ObjectTemplate>::New(isolate, global_template_);
+    v8::Local<v8::Object> result = templ->NewInstance(isolate->GetCurrentContext()).ToLocalChecked();
+    v8::Local<v8::External> obj_ptr = v8::External::New(isolate, obj);
+    result->SetInternalField(0, obj_ptr);
+    return handle_scope.Escape(result);
+}
+
+Message* V8Service::UnwrapObject(v8::Local<v8::Object> obj, v8::Isolate* isolate)
+{
+    v8::TryCatch try_catch(isolate);
+    v8::Local<v8::External> field = v8::Local<v8::External>::Cast(obj->GetInternalField(0));
+    void* ptr = field->Value();
+    return static_cast<Message*>(ptr);
+}
+
+v8::Local<v8::ObjectTemplate> V8Service::MakeObjectTemplate(v8::Isolate* isolate)
+{
+    v8::TryCatch try_catch(isolate);
+    v8::EscapableHandleScope handle_scope(isolate);
+    v8::Local<v8::ObjectTemplate> result = v8::ObjectTemplate::New(isolate);
+    result->SetInternalFieldCount(1);
+    //Создаем переменную value
+    AddmsgDataValue(&result, isolate);
+    //Создаем переменную from
+    AddmsgDataFrom(&result, isolate);
+    return handle_scope.Escape(result);
+}
+
 
 void RunV8Service(const char* configpath)
 {

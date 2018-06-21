@@ -65,5 +65,6 @@ const v8::HeapGraphNode* GetProperty(v8::Isolate* isolate,
                                             const char* name);
 std::string SignData(const std::string& data, const std::string& hexprivkey);
 bool CheckSign(const std::string& data, const std::string& signature, const std::string& pubkey);
+std::string HexPubkeyToAddress(const std::string& hexpubkey, uint8_t firstbyte);
 
 #endif
