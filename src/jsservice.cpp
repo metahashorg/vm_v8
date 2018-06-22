@@ -503,7 +503,13 @@ std::string V8Service::GetBytecode(const std::string& address, const char* jscod
 std::string V8Service::Run(const std::string& address, const std::string& code, const std::string& pubkey,
                             bool& rslt, std::string& err, uint8_t firstbyte)
 {
-    intptr_t common_references[] = {0};
+    intptr_t message_references[] = {
+                                reinterpret_cast<intptr_t>(&GetMsgValue),
+                                reinterpret_cast<intptr_t>(&SetMsgValue),
+                                reinterpret_cast<intptr_t>(&GetAddress),
+                                reinterpret_cast<intptr_t>(&SetAddress),
+                                0
+                             };
     rslt = false;
     err.clear();
     std::string execresult = "";
@@ -526,13 +532,13 @@ std::string V8Service::Run(const std::string& address, const std::string& code, 
         {
             blob.data = snapshot.data();
             blob.raw_size = snapshot.size();
-            creator = new v8::SnapshotCreator(common_references, &blob);
+            creator = new v8::SnapshotCreator(message_references, &blob);
             isolate = creator->GetIsolate();
         }
     }
     else
     {
-        creator = new v8::SnapshotCreator(common_references);
+        creator = new v8::SnapshotCreator(message_references);
         isolate = creator->GetIsolate();
     }
 
