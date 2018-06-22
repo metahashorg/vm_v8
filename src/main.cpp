@@ -197,50 +197,9 @@ void Usage(const char* progname)
         );
 }
 
-//Вспомогательные функции теста состояния
-static void SerializedCallback(const v8::FunctionCallbackInfo<v8::Value>& args)
-{
-}
-
-static void NamedPropertyGetterForSerialization(v8::Local<v8::Name> name,
-                                                const v8::PropertyCallbackInfo<v8::Value>& info)
-{
-}
-
-static void AccessorForSerialization(v8::Local<v8::String> property,
-                                     const v8::PropertyCallbackInfo<v8::Value>& info)
-{
-}
-
-static int serialized_static_field = 314;
-
-class SerializedExtension : public v8::Extension
-{
- public:
-    SerializedExtension() : v8::Extension("serialized extension") {}
-
-    virtual v8::Local<v8::FunctionTemplate> GetNativeFunctionTemplate(v8::Isolate* isolate, v8::Local<v8::String> name)
-    {
-        return v8::FunctionTemplate::New(isolate, FunctionCallback);
-    }
-    static void FunctionCallback(const v8::FunctionCallbackInfo<v8::Value>& args)
-    {
-    }
-};
-
-intptr_t original_external_references[] =
-{
-    reinterpret_cast<intptr_t>(SerializedCallback),
-    reinterpret_cast<intptr_t>(&serialized_static_field),
-    reinterpret_cast<intptr_t>(&NamedPropertyGetterForSerialization),
-    reinterpret_cast<intptr_t>(&AccessorForSerialization),
-    reinterpret_cast<intptr_t>(&SerializedExtension::FunctionCallback),
-    reinterpret_cast<intptr_t>(&serialized_static_field),
-    0
-};
-
 std::string GetBytecode(const char* jscode, std::string& cmpl)
 {
+    intptr_t common_references[] = {0};
     StdCapture out;
     std::string bytecode = "";
     cmpl.clear();
@@ -248,7 +207,7 @@ std::string GetBytecode(const char* jscode, std::string& cmpl)
     v8::V8::SetFlagsFromString("--trace-ignition", 16);
     v8::SnapshotCreator* creator = NULL;
     v8::Isolate* isolate = NULL;
-    creator = new v8::SnapshotCreator(original_external_references);
+    creator = new v8::SnapshotCreator(common_references);
     isolate = creator->GetIsolate();
     {
         v8::Isolate::Scope isolate_scope(isolate);
@@ -662,6 +621,7 @@ void CompileTest(const std::string& address, const std::string& code)
 
 void ContractStateTest(const CmdLine& cmdline)
 {
+    intptr_t common_references[] = {0};
     v8::StartupData blob;
     {
         //Проверяем есть ли входной снимок
@@ -673,12 +633,12 @@ void ContractStateTest(const CmdLine& cmdline)
             //Инициализация состояния из снимка
             blob.data = cmdline.insnap.data();
             blob.raw_size = cmdline.insnap.size();
-            creator = new v8::SnapshotCreator(original_external_references, &blob);
+            creator = new v8::SnapshotCreator(common_references, &blob);
             isolate = creator->GetIsolate();
         }
         else
         {
-            creator = new v8::SnapshotCreator(original_external_references);
+            creator = new v8::SnapshotCreator(common_references);
             isolate = creator->GetIsolate();
         }
         //Запуск isolate
@@ -767,12 +727,13 @@ void ContractStateTest(const CmdLine& cmdline)
 //Версия с JSON::Stringify
 void SnapshotDumpTest(const CmdLine& cmdline)
 {
+    intptr_t common_references[] = {0};
     v8::StartupData blob;
     v8::SnapshotCreator* creator = NULL;
     v8::Isolate* isolate = NULL;
     blob.data = cmdline.insnap.data();
     blob.raw_size = cmdline.insnap.size();
-    creator = new v8::SnapshotCreator(original_external_references, &blob);
+    creator = new v8::SnapshotCreator(common_references, &blob);
     if (creator)
     {
         isolate = creator->GetIsolate();

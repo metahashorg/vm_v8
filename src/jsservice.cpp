@@ -15,7 +15,6 @@
 #include "external/variables/msgDataFrom.hpp"
 #include "external/variables/msgDataValue.hpp"
 
-extern intptr_t original_external_references[];
 extern std::ofstream g_errorlog;
 
 static void sig_handler(int sig)
@@ -411,6 +410,14 @@ bool V8Service::Compile(const std::string& address, const std::string& code, std
 std::string V8Service::GetBytecode(const std::string& address, const char* jscode, std::string& cmpl,
                                     std::vector<uint8_t>& snapshot, std::ofstream& errlog, std::string& jserr)
 {
+    intptr_t message_references[] = {
+                                reinterpret_cast<intptr_t>(&msg),
+                                reinterpret_cast<intptr_t>(&GetMsgValue),
+                                reinterpret_cast<intptr_t>(&SetMsgValue),
+                                reinterpret_cast<intptr_t>(&GetAddress),
+                                reinterpret_cast<intptr_t>(&SetAddress),
+                                0
+                             };
     StdCapture out;
     out.BeginCapture();
     std::string bytecode = "";
@@ -420,9 +427,8 @@ std::string V8Service::GetBytecode(const std::string& address, const char* jscod
         v8::SnapshotCreator* creator = NULL;
         v8::Isolate::CreateParams params;
         v8::Isolate* isolate = NULL;
-        creator = new v8::SnapshotCreator(original_external_references);
+        creator = new v8::SnapshotCreator(message_references);
         isolate = creator->GetIsolate();
-
         //Запуск isolate
         {
             v8::HandleScope handle_scope(isolate);
@@ -431,11 +437,7 @@ std::string V8Service::GetBytecode(const std::string& address, const char* jscod
             v8::Context::Scope context_scope(context);
             //В случае компиляции msg.sender совпадает со значенением адреса отправителя
             msg.from = address;
-            if (!InstallObject(&msg, isolate))
-            {
-                g_errorlog << __FUNCTION__ << " : Can not create external variables" << std::endl;
-                return "";
-            }
+            InstallMessageObject(isolate, &msg);
             creator->SetDefaultContext(context);
             v8::Local<v8::Value> result;
 
@@ -501,10 +503,12 @@ std::string V8Service::GetBytecode(const std::string& address, const char* jscod
 std::string V8Service::Run(const std::string& address, const std::string& code, const std::string& pubkey,
                             bool& rslt, std::string& err, uint8_t firstbyte)
 {
+    intptr_t common_references[] = {0};
     rslt = false;
     err.clear();
     std::string execresult = "";
     std::string snapshot = "";
+    std::string nextsnapnum = "";
     std::unordered_map<std::string, std::vector<std::string> >::iterator it;
     se->Reload((compileDirectory + "/" + address).c_str());
     it = se->snapshotsnames.find(address);
@@ -522,36 +526,52 @@ std::string V8Service::Run(const std::string& address, const std::string& code, 
         {
             blob.data = snapshot.data();
             blob.raw_size = snapshot.size();
-            creator = new v8::SnapshotCreator(original_external_references, &blob);
+            creator = new v8::SnapshotCreator(common_references, &blob);
             isolate = creator->GetIsolate();
         }
     }
     else
     {
-        creator = new v8::SnapshotCreator(original_external_references);
+        creator = new v8::SnapshotCreator(common_references);
         isolate = creator->GetIsolate();
     }
-    //Определяем номер последнего снимка
-    std::string nextsnapnum = GetNextSnapNumber(it->second[it->second.size()-1]);
-    if (nextsnapnum.compare("0") == 0)//Это инициализирующий запуск
-        msg.from = address;
-    else
-    {
-        msg.from = HexPubkeyToAddress(pubkey, firstbyte);
-    }
+
     //Запуск isolate
     {
         v8::HandleScope handle_scope(isolate);
         v8::TryCatch try_catch(isolate);
         v8::Local<v8::Context> context = v8::Context::New(isolate);
         v8::Context::Scope context_scope(context);
-        if (!InstallObject(&msg, isolate))
-        {
-            g_errorlog << __FUNCTION__ << " : Can not create external variables" << std::endl;
-            return "";
-        }
         creator->SetDefaultContext(context);
         v8::Local<v8::Value> result;
+
+        //Определяем номер последнего снимка
+        nextsnapnum = GetNextSnapNumber(it->second[it->second.size()-1]);
+        v8::Local<v8::String> senderprop = v8::String::NewFromUtf8(isolate,
+                                                                    "msg.sender",
+                                                                    v8::NewStringType::kNormal).ToLocalChecked();
+        if (nextsnapnum.compare("0") == 0)//Это инициализирующий запуск
+        {
+            v8::Local<v8::String> sender = v8::String::NewFromUtf8(isolate,
+                                                                    address.c_str(),
+                                                                    v8::NewStringType::kNormal).ToLocalChecked();
+            if (!context->Global()->Set(context, senderprop, sender).ToChecked())
+            {
+                g_errorlog << "Can not set property msg.sender" << std::endl;
+                return "";
+            }
+        }
+        else
+        {
+            v8::Local<v8::String> sender = v8::String::NewFromUtf8(isolate,
+                                                                    HexPubkeyToAddress(pubkey, firstbyte).c_str(),
+                                                                    v8::NewStringType::kNormal).ToLocalChecked();
+            if (!context->Global()->Set(context, senderprop, sender).ToChecked())
+            {
+                g_errorlog << "Can not set property msg.sender" << std::endl;
+                return "";
+            }
+        }
 
         v8::Local<v8::String> source =
         v8::String::NewFromUtf8(isolate,
@@ -611,6 +631,7 @@ std::string V8Service::Run(const std::string& address, const std::string& code, 
 
 std::string V8Service::Dump(const std::string& address, const std::string& snapnum)
 {
+    intptr_t common_references[] = {0};
     std::string heapdump = "";
     v8::StartupData blob;
     v8::SnapshotCreator* creator = NULL;
@@ -624,7 +645,7 @@ std::string V8Service::Dump(const std::string& address, const std::string& snapn
     {
         blob.data = snapcontent.data();
         blob.raw_size = snapcontent.size();
-        creator = new v8::SnapshotCreator(original_external_references, &blob);
+        creator = new v8::SnapshotCreator(common_references, &blob);
         if (creator)
         {
             isolate = creator->GetIsolate();
@@ -634,11 +655,6 @@ std::string V8Service::Dump(const std::string& address, const std::string& snapn
             v8::Local<v8::ObjectTemplate> global = v8::ObjectTemplate::New(isolate);
             v8::Local<v8::Context> context = v8::Context::New(isolate, NULL, global);
             v8::Context::Scope context_scope(context);
-            if (!InstallObject(&msg, isolate))
-            {
-                g_errorlog << __FUNCTION__ << " : Can not create external variables" << std::endl;
-                return "";
-            }
             creator->SetDefaultContext(context);
             v8::Local<v8::Value> result;
             v8::Local<v8::Object> globalobj = context->Global();
@@ -801,49 +817,38 @@ std::string V8Service::CreateAddress(uint8_t firstbyte)
 }
 
 //Внешние переменные
-bool V8Service::InstallObject(Message* opts, v8::Isolate* isolate)
-{
-    v8::HandleScope handle_scope(isolate);
-    v8::TryCatch try_catch(isolate);
-    v8::Local<v8::Object> opts_obj = WrapObject(opts, isolate);
-    v8::Local<v8::Context> context =
-    v8::Local<v8::Context>::New(isolate, isolate->GetCurrentContext());
-    context->Global()->Set(context,
-                            v8::String::NewFromUtf8(isolate, "msgData", v8::NewStringType::kNormal).ToLocalChecked(), opts_obj).FromJust();
-    return true;
-}
-
-v8::Local<v8::Object> V8Service::WrapObject(Message* obj, v8::Isolate* isolate)
+v8::Local<v8::ObjectTemplate> V8Service::MakeMessageTemplate(v8::Isolate* isolate)
 {
     v8::EscapableHandleScope handle_scope(isolate);
-    v8::TryCatch try_catch(isolate);
-    v8::Local<v8::ObjectTemplate> raw_template = MakeObjectTemplate(isolate);
-    v8::Local<v8::ObjectTemplate> templ = v8::Local<v8::ObjectTemplate>::New(isolate, raw_template);
-    v8::Local<v8::Object> result = templ->NewInstance(isolate->GetCurrentContext()).ToLocalChecked();
-    v8::Local<v8::External> obj_ptr = v8::External::New(isolate, obj);
+    v8::Local<v8::ObjectTemplate> result = v8::ObjectTemplate::New(isolate);
+    result->SetInternalFieldCount(2);
+    //Создаем переменную value
+    AddmsgDataValue(&result, isolate);
+    AddmsgDataFrom(&result, isolate);
+    return handle_scope.Escape(result);
+}
+
+v8::Local<v8::Object> V8Service::WrapMessageObject(v8::Isolate* isolate_, Message* obj)
+{
+    v8::EscapableHandleScope handle_scope(isolate_);
+    v8::TryCatch try_catch(isolate_);
+    v8::Local<v8::ObjectTemplate> raw_template = MakeMessageTemplate(isolate_);
+    v8::Local<v8::ObjectTemplate> templ = v8::Local<v8::ObjectTemplate>::New(isolate_, raw_template);
+    v8::Local<v8::Object> result = templ->NewInstance(isolate_->GetCurrentContext()).ToLocalChecked();
+    v8::Local<v8::External> obj_ptr = v8::External::New(isolate_, obj);
     result->SetInternalField(0, obj_ptr);
     return handle_scope.Escape(result);
 }
 
-Message* V8Service::UnwrapObject(v8::Local<v8::Object> obj, v8::Isolate* isolate)
+void V8Service::InstallMessageObject(v8::Isolate* isolate_, Message* data)
 {
-    v8::TryCatch try_catch(isolate);
-    v8::Local<v8::External> field = v8::Local<v8::External>::Cast(obj->GetInternalField(0));
-    void* ptr = field->Value();
-    return static_cast<Message*>(ptr);
-}
-
-v8::Local<v8::ObjectTemplate> V8Service::MakeObjectTemplate(v8::Isolate* isolate)
-{
-    v8::TryCatch try_catch(isolate);
-    v8::EscapableHandleScope handle_scope(isolate);
-    v8::Local<v8::ObjectTemplate> result = v8::ObjectTemplate::New(isolate);
-    result->SetInternalFieldCount(1);
-    //Создаем переменную value
-    AddmsgDataValue(&result, isolate);
-    //Создаем переменную from
-    AddmsgDataFrom(&result, isolate);
-    return handle_scope.Escape(result);
+    v8::HandleScope handle_scope(isolate_);
+    v8::TryCatch try_catch(isolate_);
+    v8::Local<v8::Object> opts_obj = WrapMessageObject(isolate_, data);
+    v8::Local<v8::Context> context =
+    v8::Local<v8::Context>::New(isolate_, isolate_->GetCurrentContext());
+    context->Global()->Set(context,
+                            v8::String::NewFromUtf8(isolate_, "msg", v8::NewStringType::kNormal).ToLocalChecked(), opts_obj).FromJust();
 }
 
 

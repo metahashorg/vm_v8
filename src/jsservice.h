@@ -51,10 +51,10 @@ private:
     std::string CreateAddress(uint8_t firstbyte);
     std::string GetBytecode(const std::string& address, const char* jscode, std::string& cmpl,
                             std::vector<uint8_t>& snapshot, std::ofstream& errlog, std::string& jserr);
-    bool InstallObject(Message* opts, v8::Isolate* isolate);
-    v8::Local<v8::ObjectTemplate> MakeObjectTemplate(v8::Isolate* isolate);
-    v8::Local<v8::Object> WrapObject(Message* obj, v8::Isolate* isolate);
-    Message* UnwrapObject(v8::Local<v8::Object> obj, v8::Isolate* isolate);
+
+    v8::Local<v8::ObjectTemplate> MakeMessageTemplate(v8::Isolate* isolate);
+    v8::Local<v8::Object> WrapMessageObject(v8::Isolate* isolate_, Message* obj);
+    void InstallMessageObject(v8::Isolate* isolate_, Message* data);
 
     std::vector<LocalStore*> local_store;
     std::string compileDirectory;
