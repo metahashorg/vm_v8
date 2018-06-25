@@ -197,7 +197,6 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
                     int byteint = std::stoi(firstbyte, 0, 16);
                     if (byteint >= 0 && byteint < 256)
                     {
-
                         if (!address.empty() && !js.empty() && !pubkeyparam.empty() && !signatureparam.empty())
                         {
                             if (CheckSign(mhd_req.post, signatureparam, pubkeyparam))
@@ -437,6 +436,7 @@ std::string V8Service::GetBytecode(const std::string& address, const char* jscod
             v8::Context::Scope context_scope(context);
             //В случае компиляции msg.sender совпадает со значенением адреса отправителя
             msg.from = address;
+            msg.value = 0;
             InstallMessageObject(isolate, &msg);
             creator->SetDefaultContext(context);
             v8::Local<v8::Value> result;
@@ -467,8 +467,8 @@ std::string V8Service::GetBytecode(const std::string& address, const char* jscod
             }
             else
             {
-                //v8::String::Utf8Value utf8(isolate, result);
-                //errlog << __FUNCTION__ << ":" << *utf8 << std::endl;
+                v8::String::Utf8Value utf8(isolate, result);
+                errlog << __FUNCTION__ << ":" << *utf8 << std::endl;
             }
             //Сохраняем копию компилированного кода
             v8::Local<v8::Value> testresult;
@@ -504,6 +504,7 @@ std::string V8Service::Run(const std::string& address, const std::string& code, 
                             bool& rslt, std::string& err, uint8_t firstbyte)
 {
     intptr_t message_references[] = {
+                                reinterpret_cast<intptr_t>(&msg),
                                 reinterpret_cast<intptr_t>(&GetMsgValue),
                                 reinterpret_cast<intptr_t>(&SetMsgValue),
                                 reinterpret_cast<intptr_t>(&GetAddress),
@@ -541,7 +542,6 @@ std::string V8Service::Run(const std::string& address, const std::string& code, 
         creator = new v8::SnapshotCreator(message_references);
         isolate = creator->GetIsolate();
     }
-
     //Запуск isolate
     {
         v8::HandleScope handle_scope(isolate);
@@ -553,29 +553,36 @@ std::string V8Service::Run(const std::string& address, const std::string& code, 
 
         //Определяем номер последнего снимка
         nextsnapnum = GetNextSnapNumber(it->second[it->second.size()-1]);
-        v8::Local<v8::String> senderprop = v8::String::NewFromUtf8(isolate,
-                                                                    "msg.sender",
-                                                                    v8::NewStringType::kNormal).ToLocalChecked();
-        if (nextsnapnum.compare("0") == 0)//Это инициализирующий запуск
+        Message* nativemsg = NULL;
+        v8::Local<v8::String> msgname = v8::String::NewFromUtf8(isolate,
+                                                            "msg",
+                                                            v8::NewStringType::kNormal).ToLocalChecked();
+        v8::Local<v8::Value> msgobj = context->Global()->Get(context, msgname).ToLocalChecked();
+        if (msgobj->IsObject())
         {
-            v8::Local<v8::String> sender = v8::String::NewFromUtf8(isolate,
-                                                                    address.c_str(),
-                                                                    v8::NewStringType::kNormal).ToLocalChecked();
-            if (!context->Global()->Set(context, senderprop, sender).ToChecked())
+            v8::Local<v8::Object> obj = msgobj->ToObject();
+            nativemsg = UnwrapObject(isolate, obj);
+            if (nativemsg == NULL)
             {
-                g_errorlog << "Can not set property msg.sender" << std::endl;
+                g_errorlog << __FUNCTION__ << " : nativemsg == null" << std::endl;
                 return "";
             }
         }
         else
         {
-            v8::Local<v8::String> sender = v8::String::NewFromUtf8(isolate,
-                                                                    HexPubkeyToAddress(pubkey, firstbyte).c_str(),
-                                                                    v8::NewStringType::kNormal).ToLocalChecked();
-            if (!context->Global()->Set(context, senderprop, sender).ToChecked())
+            g_errorlog << __FUNCTION__ << " : msgobj not object" << std::endl;
+            return "";
+        }
+
+        if (nativemsg != NULL)
+        {
+            if (nextsnapnum.compare("0") == 0)//Это инициализирующий запуск
             {
-                g_errorlog << "Can not set property msg.sender" << std::endl;
-                return "";
+                nativemsg->from = address;
+            }
+            else
+            {
+                nativemsg->from = HexPubkeyToAddress(pubkey, firstbyte);
             }
         }
 
@@ -829,8 +836,8 @@ v8::Local<v8::ObjectTemplate> V8Service::MakeMessageTemplate(v8::Isolate* isolat
     v8::Local<v8::ObjectTemplate> result = v8::ObjectTemplate::New(isolate);
     result->SetInternalFieldCount(2);
     //Создаем переменную value
-    AddmsgDataValue(&result, isolate);
     AddmsgDataFrom(&result, isolate);
+    AddmsgDataValue(&result, isolate);
     return handle_scope.Escape(result);
 }
 
@@ -855,6 +862,14 @@ void V8Service::InstallMessageObject(v8::Isolate* isolate_, Message* data)
     v8::Local<v8::Context>::New(isolate_, isolate_->GetCurrentContext());
     context->Global()->Set(context,
                             v8::String::NewFromUtf8(isolate_, "msg", v8::NewStringType::kNormal).ToLocalChecked(), opts_obj).FromJust();
+}
+
+Message* V8Service::UnwrapObject(v8::Isolate* isolate_, v8::Local<v8::Object> obj)
+{
+    v8::TryCatch try_catch(isolate_);
+    v8::Local<v8::External> field = v8::Local<v8::External>::Cast(obj->GetInternalField(0));
+    void* ptr = field->Value();
+    return static_cast<Message*>(ptr);
 }
 
 

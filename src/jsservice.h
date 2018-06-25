@@ -55,7 +55,7 @@ private:
     v8::Local<v8::ObjectTemplate> MakeMessageTemplate(v8::Isolate* isolate);
     v8::Local<v8::Object> WrapMessageObject(v8::Isolate* isolate_, Message* obj);
     void InstallMessageObject(v8::Isolate* isolate_, Message* data);
-
+    Message* UnwrapObject(v8::Isolate* isolate_, v8::Local<v8::Object> obj);
     std::vector<LocalStore*> local_store;
     std::string compileDirectory;
     std::string keysDirectory;
