@@ -203,7 +203,7 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
                             {
                                 bool rslt = false;
                                 std::string err = "";
-                                response = Run(address, js, pubkeyparam, rslt, err, 0x4);
+                                response = Run(address, js, pubkeyparam, rslt, err, byteint);
                                 if (rslt)
                                 {
                                     mhd_resp.data = response;
@@ -582,6 +582,8 @@ std::string V8Service::Run(const std::string& address, const std::string& code, 
             }
             else
             {
+                g_errorlog << "pubkey = " << pubkey << std::endl;
+                g_errorlog << "first byte = " << firstbyte << std::endl;
                 nativemsg->from = HexPubkeyToAddress(pubkey, firstbyte);
             }
         }
