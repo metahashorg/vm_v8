@@ -582,8 +582,6 @@ std::string V8Service::Run(const std::string& address, const std::string& code, 
             }
             else
             {
-                g_errorlog << "pubkey = " << pubkey << std::endl;
-                g_errorlog << "first byte = " << firstbyte << std::endl;
                 nativemsg->from = HexPubkeyToAddress(pubkey, firstbyte);
             }
         }
