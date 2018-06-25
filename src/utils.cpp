@@ -245,18 +245,20 @@ bool CreateECKeyPairAndAddr(std::string& privkey,
 std::string HexPubkeyToAddress(const std::string& hexpubkey, uint8_t firstbyte)
 {
     std::string address = "";
+    std::vector<uint8_t> pubkeydump;
     if (!hexpubkey.empty())
     {
-        std::vector<uint8_t> pubkeydump;
         HexStringToDump(hexpubkey, pubkeydump);
+        size_t pubkeysize = pubkeydump.size();
+        uint8_t* pubkeydata = pubkeydump.data();
 
-        if (pubkeydump.size() >= 65)
+        if (pubkeysize >= 65)
         {
-            pubkeydump[pubkeydump.size() - 65] = firstbyte;
+            pubkeydata[pubkeysize - 65] = 0x04;
             uint8_t out[25];
-            if (MhcPubkeyToAddress(pubkeydump.data() + (pubkeydump.size() - 65), 65, out, 25, firstbyte))
+            if (MhcPubkeyToAddress(pubkeydata + (pubkeysize - 65), 65, out, 25, firstbyte))
             {
-                address = "0x" + DumpToHexString(out, 25);
+                address = DumpToHexString(out, 25);
             }
         }
     }
