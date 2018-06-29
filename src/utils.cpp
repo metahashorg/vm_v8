@@ -6,6 +6,8 @@
 #include <re2/re2.h>
 #include <dirent.h>
 #include <sys/stat.h>
+#include <sstream>
+#include <rapidjson/document.h>
 
 std::string DumpToHexString(const uint8_t* dump, uint32_t dumpsize)
 {
@@ -552,4 +554,44 @@ const v8::HeapGraphNode* GetProperty(v8::Isolate* isolate,
             return prop->GetToNode();
   }
   return NULL;
+}
+
+
+std::string JSONToMethodCall(const std::string& json)
+{
+    std::stringstream ss;
+    rapidjson::Document doc;
+    if (!doc.Parse(json.c_str()).HasParseError())
+    {
+        if (
+            doc.HasMember("method") && doc["method"].IsString() &&
+            doc.HasMember("params") && doc["params"].IsArray()
+            )
+            {
+                ss << "contExp." << doc["method"].GetString() << "(";
+                if (doc["params"].Size() > 0)
+                {
+                    for (size_t i = 0; i < doc["params"].Size(); ++i)
+                    {
+                        if (doc["params"][i].IsInt())
+                        {
+                            ss << doc["params"][i].GetInt();
+                            if (i != doc["params"].Size() - 1)
+                                ss << ",";
+                        }
+                        else
+                        {
+                            if (doc["params"][i].IsString())
+                            {
+                                ss << "\"" << doc["params"][i].GetString() << "\"";
+                                if (i != doc["params"].Size() - 1)
+                                    ss << ",";
+                            }
+                        }
+                    }
+                }
+                ss << ");";
+            }
+    }
+    return ss.str();
 }

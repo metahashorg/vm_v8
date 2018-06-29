@@ -862,6 +862,7 @@ void SnapshotDumpTest(const CmdLine& cmdline)
     }
 }
 
+
 int main(int argc, char* argv[])
 {
     g_errorlog.open ("err.log", std::ofstream::out | std::ofstream::app);

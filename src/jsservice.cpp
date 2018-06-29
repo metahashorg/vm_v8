@@ -203,17 +203,25 @@ void V8Service::ProcessRequest(Request& mhd_req, Response& mhd_resp)
                             {
                                 bool rslt = false;
                                 std::string err = "";
-                                response = Run(address, js, pubkeyparam, rslt, err, byteint);
-                                if (rslt)
+                                std::string methodcall = JSONToMethodCall(js);
+                                if (!methodcall.empty())
                                 {
-                                    mhd_resp.data = response;
-                                    mhd_resp.code = HTTP_OK_CODE;
+                                    response = Run(address, methodcall, pubkeyparam, rslt, err, byteint);
+                                    if (rslt)
+                                    {
+                                        mhd_resp.data = response;
+                                        mhd_resp.code = HTTP_OK_CODE;
+                                    }
+                                    else
+                                    {
+                                        if (err.empty())
+                                            err = "Internal service error";
+                                        mhd_resp.data = err;
+                                    }
                                 }
                                 else
                                 {
-                                    if (err.empty())
-                                        err = "Internal service error";
-                                    mhd_resp.data = err;
+                                    mhd_resp.data = "Invalid json format";
                                 }
                             }
                             else
@@ -644,7 +652,14 @@ std::string V8Service::Run(const std::string& address, const std::string& code, 
 
 std::string V8Service::Dump(const std::string& address, const std::string& snapnum)
 {
-    intptr_t common_references[] = {0};
+    intptr_t message_references[] = {
+                                reinterpret_cast<intptr_t>(&msg),
+                                reinterpret_cast<intptr_t>(&GetMsgValue),
+                                reinterpret_cast<intptr_t>(&SetMsgValue),
+                                reinterpret_cast<intptr_t>(&GetAddress),
+                                reinterpret_cast<intptr_t>(&SetAddress),
+                                0
+                             };
     std::string heapdump = "";
     v8::StartupData blob;
     v8::SnapshotCreator* creator = NULL;
@@ -653,12 +668,13 @@ std::string V8Service::Dump(const std::string& address, const std::string& snapn
     //Читаем файл со снимком
     std::string snappath = compileDirectory + "/" + address + "/" + address + "." +
                                     snapnum + ".shot";
+    g_errorlog << "snapshot:" << snappath << std::endl;
     std::string snapcontent = ReadFile(snappath);
     if (!snapcontent.empty())
     {
         blob.data = snapcontent.data();
         blob.raw_size = snapcontent.size();
-        creator = new v8::SnapshotCreator(common_references, &blob);
+        creator = new v8::SnapshotCreator(message_references, &blob);
         if (creator)
         {
             isolate = creator->GetIsolate();
